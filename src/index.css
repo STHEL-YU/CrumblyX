@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+:root {
+  font-family: 'Nunito', 'Trebuchet MS', sans-serif;
+  color: #67431e;
+  background: #f1e4cf;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body, #root { width: 100%; min-width: 320px; height: 100%; margin: 0; }
+body { min-height: 100dvh; }
+button { -webkit-tap-highlight-color: transparent; }
