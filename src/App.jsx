@@ -9,6 +9,12 @@ import CosHome from './pages/costumer_screen/cos_home.jsx'
 import CosOrderType from './pages/costumer_screen/cos_order_type.jsx'
 import CosTableScanner from './pages/costumer_screen/cos_table_scanner.jsx'
 import CosWelcome from './pages/costumer_screen/cos_welcome.jsx'
+import StaffLogin from './pages/admin_screen/auth/staff_login.jsx'
+import StaffDashboard from './pages/admin_screen/staff_dashboard.jsx'
+import StaffOrders from './pages/admin_screen/staff_order.jsx'
+import StaffMenu from './pages/admin_screen/staff_menu.jsx'
+import StaffStock from './pages/admin_screen/staff_stock.jsx'
+import StaffCustomers from './pages/admin_screen/staff_costumer.jsx'
 
 export default function AppLayout() {
   const location = useLocation()
@@ -22,8 +28,14 @@ export default function AppLayout() {
   }
 
   return (
-    <main className="app-shell">
+    <div className={`app-shell ${currentPath.startsWith('/staff/') ? 'staff-shell' : ''}`}>
       <Routes>
+        <Route path="/staff/login" element={<StaffLogin />} />
+        <Route path="/staff/dashboard" element={<StaffDashboard />} />
+        <Route path="/staff/orders" element={<StaffOrders />} />
+        <Route path="/staff/menu" element={<StaffMenu />} />
+        <Route path="/staff/stocks" element={<StaffStock />} />
+        <Route path="/staff/customers" element={<StaffCustomers />} />
         <Route
           path="/"
           element={
@@ -87,7 +99,7 @@ export default function AppLayout() {
         <Route path="/home" element={<CosHome />} />
         <Route path="*" element={<Navigate to={currentPath === '/menu' ? '/home' : '/'} replace />} />
       </Routes>
-    </main>
+    </div>
   )
 }
 
