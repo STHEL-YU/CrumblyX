@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Icon } from '../../components/customer_ui.jsx'
 
-export default function CosProfile({ customer, order, onClose, onLogout, onTrackOrder }) {
+export default function CosProfile({ customer, orders, onClose, onLogout, onTrackOrder }) {
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -36,18 +36,31 @@ export default function CosProfile({ customer, order, onClose, onLogout, onTrack
             <div><dt>Email</dt><dd>{customer.email || 'Not provided'}</dd></div>
           </dl>
         </div>
-        {order && (
-          <section className="profile-order" aria-labelledby="profile-order-title">
-            <div className="profile-order-heading">
-              <span className="profile-order-status"><i /> In progress</span>
-              <strong>#{order.id}</strong>
-            </div>
-            <h3 id="profile-order-title">Active order</h3>
-            <p>
-              {order.mode === 'dine-in' ? `Dine in · Table ${order.tableNumber}` : 'Takeout'}
-              {' · '}₱ {order.total}
-            </p>
-            <button type="button" onClick={onTrackOrder}>Track order</button>
+        {orders.length > 0 && (
+          <section className="profile-orders" aria-label="Orders in progress">
+            <h3 className="profile-orders-title">Orders in progress</h3>
+            {orders.map((order) => (
+              <article className="profile-order" key={order.id} aria-labelledby={`profile-order-${order.id}`}>
+                <div className="profile-order-heading">
+                  <span className="profile-order-status"><i /> In progress</span>
+                  <strong>#{order.id}</strong>
+                </div>
+                <h4 id={`profile-order-${order.id}`}>Order</h4>
+                <p>
+                  {order.mode === 'dine-in' ? `Dine in · Table ${order.tableNumber}` : 'Takeout'}
+                  {' · '}₱ {order.total}
+                </p>
+                <ul className="profile-order-items">
+                  {order.items.map((item) => (
+                    <li key={item.id}>
+                      <span>{item.quantity} × {item.name}</span>
+                      <strong>In progress</strong>
+                    </li>
+                  ))}
+                </ul>
+                <button type="button" onClick={() => onTrackOrder(order)}>Track order</button>
+              </article>
+            ))}
           </section>
         )}
         <button className="profile-logout" type="button" onClick={onLogout}>

@@ -41,8 +41,8 @@ export default function CosHome() {
   const [cart, setCart] = useState([])
   const [selectedCartItemIds, setSelectedCartItemIds] = useState(() => new Set())
   const [cartOpen, setCartOpen] = useState(false)
-  const [trackedOrder, setTrackedOrder] = useState(null)
-  const [trackingOpen, setTrackingOpen] = useState(false)
+  const [trackedOrders, setTrackedOrders] = useState([])
+  const [trackingOrder, setTrackingOrder] = useState(null)
   const [messageOpen, setMessageOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [customer] = useState(() => ({
@@ -126,14 +126,15 @@ export default function CosHome() {
     const itemsToOrder = cart.filter((item) => selectedCartItemIds.has(item.id))
     if (itemsToOrder.length === 0) return
 
-    setTrackedOrder({
+    const newOrder = {
       id: Date.now().toString().slice(-8),
       mode: orderMode,
       tableNumber,
       items: itemsToOrder,
       total: itemsToOrder.reduce((sum, item) => sum + item.price * item.quantity, 0),
-    })
-    setTrackingOpen(true)
+    }
+    setTrackedOrders((orders) => [...orders, newOrder])
+    setTrackingOrder(newOrder)
     const remainingItems = cart.filter((item) => !selectedCartItemIds.has(item.id))
     setCart(remainingItems)
     setSelectedCartItemIds(new Set(remainingItems.map((item) => item.id)))
@@ -178,6 +179,7 @@ export default function CosHome() {
   return (
     <>
       <div className="menu-screen">
+        
         <header className="menu-header">
           <button className="header-brand" onClick={() => setCategoryAndScroll('All Items')} aria-label="CrumblyX home">
             <Logo small /><span>CrumblyX</span>
@@ -190,15 +192,16 @@ export default function CosHome() {
               {cartCount > 0 && <span className="cart-count">{cartCount}</span>}
             </button>
             <button
-              className={`header-icon profile-trigger ${trackedOrder ? 'has-active-order' : ''}`}
-              aria-label={trackedOrder ? 'View customer profile, active order in progress' : 'View customer profile'}
+              className={`header-icon profile-trigger ${trackedOrders.length ? 'has-active-order' : ''}`}
+              aria-label={trackedOrders.length ? 'View customer profile, orders in progress' : 'View customer profile'}
               onClick={() => setProfileOpen(true)}
             >
               <Icon name="user" />
-              {trackedOrder && <span className="profile-order-indicator" aria-hidden="true" />}
+              {trackedOrders.length > 0 && <span className="profile-order-indicator" aria-hidden="true" />}
             </button>
           </div>
         </header>
+
         <div className="menu-scroll">
           <div className="menu-content">
             <section className="table-banner">
@@ -342,17 +345,17 @@ export default function CosHome() {
       {profileOpen && (
         <CosProfile
           customer={customer}
-          order={trackedOrder}
+          orders={trackedOrders}
           onClose={() => setProfileOpen(false)}
-          onTrackOrder={() => {
+          onTrackOrder={(order) => {
             setProfileOpen(false)
-            setTrackingOpen(true)
+            setTrackingOrder(order)
           }}
           onLogout={logout}
         />
       )}
-      {trackedOrder && trackingOpen && (
-        <CosOrderTracking order={trackedOrder} onClose={() => setTrackingOpen(false)} />
+      {trackingOrder && (
+        <CosOrderTracking order={trackingOrder} onClose={() => setTrackingOrder(null)} />
       )}
     </>
   )
