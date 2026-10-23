@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Icon, Logo } from '../../../components/customer_ui.jsx'
+import { adminTw } from '../staff_admin_tw.js'
 
 export default function StaffLogin({ onSubmit, onForgotPassword, onSignUp, onSocialLogin }) {
   const [email, setEmail] = useState('')
@@ -57,25 +58,25 @@ export default function StaffLogin({ onSubmit, onForgotPassword, onSignUp, onSoc
   }
 
   return (
-    <div className="staff-login-scene">
-      <div className="staff-login-photo" aria-hidden="true" />
-      <div className="staff-login-shade" aria-hidden="true" />
+    <div className={adminTw("staff-login-scene")}>
+      <div className={adminTw("staff-login-photo")} aria-hidden="true" />
+      <div className={adminTw("staff-login-shade")} aria-hidden="true" />
 
-      <header className="staff-login-header">
-        <a className="staff-login-brand" href="/" aria-label="CrumblyX home">
+      <header className={adminTw("staff-login-header")}>
+        <a className={adminTw("staff-login-brand")} href="/" aria-label="CrumblyX home">
           <Logo small />
           <span>CrumblyX</span>
         </a>
-        <span className="staff-login-est">EST. 2026</span>
+        <span className={adminTw("staff-login-est")}>EST. 2026</span>
       </header>
 
-      <main className="staff-login-main">
-        <section className="staff-login-card" aria-labelledby="staff-login-title">
-          <h1 id="staff-login-title">Welcome Back!</h1>
-          <p className="staff-login-subtitle">Sign In to continue</p>
+      <main className={adminTw("staff-login-main")}>
+        <section className={adminTw("staff-login-card")} aria-labelledby="staff-login-title">
+          <h1 className={adminTw("staff-login-card-title")} id="staff-login-title">Welcome Back!</h1>
+          <p className={adminTw("staff-login-subtitle")}>Sign In to continue</p>
 
           <form onSubmit={submit} noValidate>
-            <div className="staff-login-field">
+            <div className={adminTw("staff-login-field")}>
               <label htmlFor="staff-login-email">Email</label>
               <input
                 id="staff-login-email"
@@ -92,12 +93,12 @@ export default function StaffLogin({ onSubmit, onForgotPassword, onSignUp, onSoc
                   setErrors((current) => ({ ...current, email: '' }))
                 }}
               />
-              {errors.email && <p className="staff-login-field-error" id="staff-login-email-error">{errors.email}</p>}
+              {errors.email && <p className={adminTw("staff-login-field-error")} id="staff-login-email-error">{errors.email}</p>}
             </div>
 
-            <div className="staff-login-field">
+            <div className={adminTw("staff-login-field")}>
               <label htmlFor="staff-login-password">Password</label>
-              <span className="staff-login-password">
+              <span className={adminTw("staff-login-password")}>
                 <input
                   id="staff-login-password"
                   name="password"
@@ -113,7 +114,7 @@ export default function StaffLogin({ onSubmit, onForgotPassword, onSignUp, onSoc
                   }}
                 />
                 <button
-                  className="staff-login-password-toggle"
+                  className={adminTw("staff-login-password-toggle")}
                   type="button"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                   aria-pressed={showPassword}
@@ -122,35 +123,35 @@ export default function StaffLogin({ onSubmit, onForgotPassword, onSignUp, onSoc
                   <Icon name={showPassword ? 'eyeOff' : 'eye'} size={19} />
                 </button>
               </span>
-              {errors.password && <p className="staff-login-field-error" id="staff-login-password-error">{errors.password}</p>}
+              {errors.password && <p className={adminTw("staff-login-field-error")} id="staff-login-password-error">{errors.password}</p>}
             </div>
 
-            {formError && <p className="staff-login-error" role="alert">{formError}</p>}
+            {formError && <p className={adminTw("staff-login-error")} role="alert">{formError}</p>}
 
-            <button className="staff-login-submit" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? <><span className="staff-login-spinner" aria-hidden="true" /> Signing in…</> : 'Sign In'}
+            <button className={adminTw("staff-login-submit")} type="submit" disabled={isSubmitting}>
+              {isSubmitting ? <><span className={adminTw("staff-login-spinner")} aria-hidden="true" /> Signing in…</> : 'Sign In'}
             </button>
           </form>
 
-          <div className="staff-login-options">
-            <label className="staff-login-remember">
+          <div className={adminTw("staff-login-options")}>
+            <label className={adminTw("staff-login-remember")}>
               <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />
               <span>Remember Me</span>
             </label>
-            <button type="button" className="staff-login-link" onClick={() => runOptionalAction(onForgotPassword, 'Password reset is not available yet. Contact your administrator.')}>
+            <button type="button" className={adminTw("staff-login-link")} onClick={() => runOptionalAction(onForgotPassword, 'Password reset is not available yet. Contact your administrator.')}>
               Forgot password?
             </button>
           </div>
 
-          <p className="staff-login-signup">
+          <p className={adminTw("staff-login-signup")}>
             Don&apos;t have an account?{' '}
-            <button type="button" className="staff-login-link staff-login-signup-link" onClick={() => runOptionalAction(onSignUp, 'Staff account registration is managed by your administrator.')}>
+            <button type="button" className={adminTw("staff-login-link staff-login-signup-link")} onClick={() => runOptionalAction(onSignUp, 'Staff account registration is managed by your administrator.')}>
               Sign up
             </button>
           </p>
 
-          <div className="staff-login-divider"><span />or sign in with<span /></div>
-          <div className="staff-login-socials" aria-label="Other sign-in options">
+          <div className={adminTw("staff-login-divider")}><span />or sign in with<span /></div>
+          <div className={adminTw("staff-login-socials")} aria-label="Other sign-in options">
             {['google', 'apple', 'facebook'].map((provider) => (
               <button
                 type="button"
@@ -165,7 +166,7 @@ export default function StaffLogin({ onSubmit, onForgotPassword, onSignUp, onSoc
               </button>
             ))}
           </div>
-          {notice && <p className="staff-login-notice" role="status">{notice}</p>}
+          {notice && <p className={adminTw("staff-login-notice")} role="status">{notice}</p>}
         </section>
       </main>
     </div>

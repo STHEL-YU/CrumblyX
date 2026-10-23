@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 
+import { adminTw } from './staff_admin_tw.js'
+
 function DashboardIcon({ name, size = 19 }) {
   const iconPaths = {
     dashboard: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
@@ -61,23 +63,23 @@ function StaffProfileDialog({ onClose }) {
   }, [onClose])
 
   return (
-    <div className="staff-profile-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section ref={dialogRef} className="staff-profile-dialog" role="dialog" aria-modal="true" aria-labelledby="staff-profile-title">
-        <header>
-          <div><span>CRUMBLYX ACCOUNT</span><h2 id="staff-profile-title">Staff Profile</h2></div>
-          <button type="button" aria-label="Close staff profile" onClick={onClose}><DashboardIcon name="close" size={18} /></button>
+    <div className={adminTw("staff-profile-backdrop fixed inset-0 z-[60] grid place-items-center bg-stone-950/45 p-4 backdrop-blur-sm")} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <section ref={dialogRef} className={adminTw("staff-profile-dialog max-h-[min(90dvh,660px)] w-full max-w-[420px] overflow-auto rounded-3xl border border-amber-100 bg-[#fffaf3] p-6 text-amber-950 shadow-2xl")} role="dialog" aria-modal="true" aria-labelledby="staff-profile-title">
+        <header className={adminTw("flex items-start justify-between gap-4 border-b border-amber-100 pb-4")}>
+          <div><span className={adminTw("text-[9px] font-extrabold tracking-[1.25px] text-amber-900/60")}>CRUMBLYX ACCOUNT</span><h2 id="staff-profile-title" className={adminTw("mt-1 text-2xl font-extrabold text-amber-950")}>Staff Profile</h2></div>
+          <button className={adminTw("grid size-9 shrink-0 place-items-center rounded-full bg-rose-500 text-white transition hover:bg-rose-600 active:scale-95")} type="button" aria-label="Close staff profile" onClick={onClose}><DashboardIcon name="close" size={18} /></button>
         </header>
-        <div className="staff-profile-identity">
-          <span className="staff-profile-avatar" aria-hidden="true">JD</span>
-          <div><h3>John Doe</h3><p>Administrator</p></div>
+        <div className={adminTw("staff-profile-identity flex items-center gap-4 py-5")}>
+          <span className={adminTw("staff-profile-avatar grid size-16 shrink-0 place-items-center rounded-full border-[3px] border-amber-100 bg-gradient-to-br from-amber-800 to-amber-300 text-lg font-extrabold text-white shadow-md")} aria-hidden="true">JD</span>
+          <div><h3 className={adminTw("text-lg font-extrabold")}>John Doe</h3><p className={adminTw("mt-1 inline-flex min-h-6 items-center rounded-full bg-green-100 px-3 text-xs font-extrabold text-green-900")}>Administrator</p></div>
         </div>
-        <dl>
-          <div><dt>Email address</dt><dd>doe@example.com</dd></div>
-          <div><dt>Account role</dt><dd>Staff administrator</dd></div>
-          <div><dt>Access</dt><dd>CrumblyX Admin Dashboard</dd></div>
-          <div><dt>Account status</dt><dd><span className="staff-profile-active"><i aria-hidden="true" />Active</span></dd></div>
+        <dl className={adminTw("grid border-t border-amber-100")}>
+          <div className={adminTw("grid grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)] gap-3 border-b border-amber-100 py-3")}><dt className={adminTw("text-xs font-bold text-amber-900/60")}>Email address</dt><dd className={adminTw("m-0 break-words text-right text-xs font-extrabold")}>doe@example.com</dd></div>
+          <div className={adminTw("grid grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)] gap-3 border-b border-amber-100 py-3")}><dt className={adminTw("text-xs font-bold text-amber-900/60")}>Account role</dt><dd className={adminTw("m-0 break-words text-right text-xs font-extrabold")}>Staff administrator</dd></div>
+          <div className={adminTw("grid grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)] gap-3 border-b border-amber-100 py-3")}><dt className={adminTw("text-xs font-bold text-amber-900/60")}>Access</dt><dd className={adminTw("m-0 break-words text-right text-xs font-extrabold")}>CrumblyX Admin Dashboard</dd></div>
+          <div className={adminTw("grid grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)] gap-3 border-b border-amber-100 py-3")}><dt className={adminTw("text-xs font-bold text-amber-900/60")}>Account status</dt><dd className={adminTw("m-0 flex justify-end text-right text-xs font-extrabold")}><span className={adminTw("staff-profile-active inline-flex items-center gap-1.5 text-green-900")}><i className={adminTw("size-2 rounded-full bg-lime-600")} aria-hidden="true" />Active</span></dd></div>
         </dl>
-        <button className="staff-profile-done" type="button" onClick={onClose}>Done</button>
+        <button className={adminTw("staff-profile-done mt-4 min-h-10 w-full rounded-xl bg-amber-900 text-sm font-extrabold text-white transition hover:bg-amber-950 active:scale-[.99]")} type="button" onClick={onClose}>Done</button>
       </section>
     </div>
   )

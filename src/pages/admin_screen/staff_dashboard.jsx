@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Logo } from '../../components/customer_ui.jsx'
 import { DashboardIcon, StaffProfileDialog } from './staff_admin_shared.jsx'
+import { adminTw } from './staff_admin_tw.js'
 import { useStaffProfile } from './staff_profile.js'
 import { STAFF_NAVIGATION } from './staff_navigation.js'
-import './staff_dashboard.css'
 
 const DASHBOARD_DATA = {
   sales: {
@@ -60,7 +60,7 @@ const palette = {
 
 function ChartCard({ title, className = '', children }) {
   return (
-    <section className={`dashboard-card ${className}`} aria-label={title}>
+    <section className={adminTw(`dashboard-card rounded-2xl border border-stone-200 bg-white p-4 shadow-sm ${className}`)} aria-label={title}>
       <h2>{title}</h2>
       {children}
     </section>
@@ -79,12 +79,12 @@ function SalesChart() {
   const gap = (plotWidth - barWidth * DASHBOARD_DATA.sales.labels.length) / (DASHBOARD_DATA.sales.labels.length - 1)
   const ticks = [0, 25, 50, 75, 100]
   return (
-    <div className="chart-layout sales-layout">
-      <div className="svg-chart-wrap">
-        <svg className="svg-chart" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="Stacked sales by day from zero to one hundred">
+    <div className={adminTw("chart-layout sales-layout")}>
+      <div className={adminTw("svg-chart-wrap")}>
+        <svg className={adminTw("svg-chart")} viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="Stacked sales by day from zero to one hundred">
           {ticks.map((tick) => {
             const y = top + plotHeight - tick / 100 * plotHeight
-            return <g key={tick}><line x1={left} x2={chartWidth} y1={y} y2={y} stroke={palette.grid} strokeDasharray="3 4" /><text x={left - 8} y={y + 3} textAnchor="end" className="chart-axis-label">{tick}</text></g>
+            return <g key={tick}><line x1={left} x2={chartWidth} y1={y} y2={y} stroke={palette.grid} strokeDasharray="3 4" /><text x={left - 8} y={y + 3} textAnchor="end" className={adminTw("chart-axis-label")}>{tick}</text></g>
           })}
           {DASHBOARD_DATA.sales.labels.map((label, index) => {
             let bottomValue = 0
@@ -96,15 +96,15 @@ function SalesChart() {
                   const height = value / 100 * plotHeight
                   const y = top + plotHeight - (bottomValue + value) / 100 * plotHeight
                   bottomValue += value
-                  return <rect className="chart-bar-animated" key={series.name} x={x} y={y} width={barWidth} height={height} rx="3" fill={series.color}><title>{`${label}: ${series.name}, ${value}`}</title></rect>
+                  return <rect className={adminTw("chart-bar-animated")} key={series.name} x={x} y={y} width={barWidth} height={height} rx="3" fill={series.color}><title>{`${label}: ${series.name}, ${value}`}</title></rect>
                 })}
-                <text x={x + barWidth / 2} y={chartHeight - 7} textAnchor="middle" className="chart-axis-label">{label}</text>
+                <text x={x + barWidth / 2} y={chartHeight - 7} textAnchor="middle" className={adminTw("chart-axis-label")}>{label}</text>
               </g>
             )
           })}
         </svg>
       </div>
-      <ul className="chart-legend">
+      <ul className={adminTw("chart-legend")}>
         {DASHBOARD_DATA.sales.series.map((series) => <li key={series.name}><i style={{ background: series.color }} />{series.name}</li>)}
       </ul>
     </div>
@@ -127,19 +127,19 @@ function ResourcesChart() {
     return result
   }, { angle: -Math.PI / 2, slices: [] }).slices
   return (
-    <div className="resources-layout">
-      <div className="resource-pie-wrap">
-        <svg className="resource-pie" viewBox="0 0 180 180" role="img" aria-label="Resources and tasks distribution">
+    <div className={adminTw("resources-layout")}>
+      <div className={adminTw("resource-pie-wrap")}>
+        <svg className={adminTw("resource-pie")} viewBox="0 0 180 180" role="img" aria-label="Resources and tasks distribution">
           {slices.map((item) => {
             const path = describeArc(90, 90, 78, item.startAngle, item.endAngle)
             return <path key={item.label} d={path} fill={item.color} stroke="#fff" strokeWidth="2"><title>{`${item.label}: ${item.value}`}</title><animate attributeName="opacity" from="0" to="1" dur=".55s" fill="freeze" /></path>
           })}
           <circle cx="90" cy="90" r="43" fill="#fffefa" />
-          <text x="90" y="86" textAnchor="middle" className="pie-total">{total}</text>
-          <text x="90" y="103" textAnchor="middle" className="pie-caption">resources</text>
+          <text x="90" y="86" textAnchor="middle" className={adminTw("pie-total")}>{total}</text>
+          <text x="90" y="103" textAnchor="middle" className={adminTw("pie-caption")}>resources</text>
         </svg>
       </div>
-      <ul className="resource-legend">
+      <ul className={adminTw("resource-legend")}>
         {DASHBOARD_DATA.resources.map((item) => <li key={item.label}><span><i style={{ background: item.color }} />{item.label}</span><strong>{item.value}</strong></li>)}
       </ul>
     </div>
@@ -148,7 +148,7 @@ function ResourcesChart() {
 
 function CustomerSegments({ data, label }) {
   return (
-    <div className="customer-segments" role="img" aria-label={`${label}: ${data.join('%, ')}%`}>
+    <div className={adminTw("customer-segments")} role="img" aria-label={`${label}: ${data.join('%, ')}%`}>
       {data.map((segment, index) => <span key={index} style={{ width: `${segment}%` }} />)}
     </div>
   )
@@ -166,20 +166,20 @@ function BudgetChart() {
   const barWidth = 17
   const ticks = [0, 250, 500, 750, 1000]
   return (
-    <div className="svg-chart-wrap">
-      <svg className="svg-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Budget comparison in dollars from zero to one thousand">
+    <div className={adminTw("svg-chart-wrap")}>
+      <svg className={adminTw("svg-chart")} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Budget comparison in dollars from zero to one thousand">
         {ticks.map((tick) => {
           const y = top + plotHeight - tick / 1000 * plotHeight
-          return <g key={tick}><line x1={left} x2={width} y1={y} y2={y} stroke={palette.grid} strokeDasharray="3 4" /><text x={left - 7} y={y + 3} textAnchor="end" className="chart-axis-label">{tick}</text></g>
+          return <g key={tick}><line x1={left} x2={width} y1={y} y2={y} stroke={palette.grid} strokeDasharray="3 4" /><text x={left - 7} y={y + 3} textAnchor="end" className={adminTw("chart-axis-label")}>{tick}</text></g>
         })}
         {DASHBOARD_DATA.budget.labels.map((label, index) => {
           const center = left + groupWidth * (index + .5)
           const last = DASHBOARD_DATA.budget.lastMonth[index]
           const current = DASHBOARD_DATA.budget.current[index]
           return <g key={label}>
-            <rect className="chart-bar-animated" x={center - barWidth - 2} y={top + plotHeight - last / 1000 * plotHeight} width={barWidth} height={last / 1000 * plotHeight} rx="3" fill={palette.tan}><title>{`Last month ${label}: ${last}`}</title></rect>
-            <rect className="chart-bar-animated" x={center + 2} y={top + plotHeight - current / 1000 * plotHeight} width={barWidth} height={current / 1000 * plotHeight} rx="3" fill={palette.green}><title>{`Current ${label}: ${current}`}</title></rect>
-            <text x={center} y={height - 8} textAnchor="middle" className="chart-axis-label">{label}</text>
+            <rect className={adminTw("chart-bar-animated")} x={center - barWidth - 2} y={top + plotHeight - last / 1000 * plotHeight} width={barWidth} height={last / 1000 * plotHeight} rx="3" fill={palette.tan}><title>{`Last month ${label}: ${last}`}</title></rect>
+            <rect className={adminTw("chart-bar-animated")} x={center + 2} y={top + plotHeight - current / 1000 * plotHeight} width={barWidth} height={current / 1000 * plotHeight} rx="3" fill={palette.green}><title>{`Current ${label}: ${current}`}</title></rect>
+            <text x={center} y={height - 8} textAnchor="middle" className={adminTw("chart-axis-label")}>{label}</text>
           </g>
         })}
       </svg>
@@ -202,9 +202,9 @@ function ChangeChart() {
   const zeroY = y(0)
   const gap = plotWidth / DASHBOARD_DATA.customerChange.length
   return (
-    <div className="svg-chart-wrap">
-      <svg className="svg-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Daily new customer change from minus fifty to one hundred">
-        {[-50, 0, 50, 100].map((tick) => <g key={tick}><line x1={left} x2={width} y1={y(tick)} y2={y(tick)} stroke={palette.grid} strokeDasharray={tick === 0 ? '0' : '3 4'} strokeWidth={tick === 0 ? 1.5 : 1} /><text x={left - 7} y={y(tick) + 3} textAnchor="end" className="chart-axis-label">{tick}</text></g>)}
+    <div className={adminTw("svg-chart-wrap")}>
+      <svg className={adminTw("svg-chart")} viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Daily new customer change from minus fifty to one hundred">
+        {[-50, 0, 50, 100].map((tick) => <g key={tick}><line x1={left} x2={width} y1={y(tick)} y2={y(tick)} stroke={palette.grid} strokeDasharray={tick === 0 ? '0' : '3 4'} strokeWidth={tick === 0 ? 1.5 : 1} /><text x={left - 7} y={y(tick) + 3} textAnchor="end" className={adminTw("chart-axis-label")}>{tick}</text></g>)}
         {DASHBOARD_DATA.customerChange.map((item, index) => {
           const x = left + gap * (index + .5)
           const positive = item.value >= 0
@@ -212,9 +212,9 @@ function ChangeChart() {
           const barY = positive ? endY : zeroY
           const barHeight = Math.max(2, Math.abs(zeroY - endY))
           return <g key={item.label}>
-            <rect className="chart-bar-animated" x={x - 6} y={barY} width="12" height={barHeight} rx="4" fill={positive ? palette.blue : palette.red}><title>{`${item.label}: ${item.value > 0 ? '+' : ''}${item.value} customers`}</title></rect>
+            <rect className={adminTw("chart-bar-animated")} x={x - 6} y={barY} width="12" height={barHeight} rx="4" fill={positive ? palette.blue : palette.red}><title>{`${item.label}: ${item.value > 0 ? '+' : ''}${item.value} customers`}</title></rect>
             <path d={positive ? `M ${x} ${endY - 5} l -4 6 h 8 Z` : `M ${x} ${endY + 5} l -4 -6 h 8 Z`} fill={positive ? palette.blue : palette.red} />
-            <text x={x} y={height - 6} textAnchor="middle" className="chart-axis-label">{item.label}</text>
+            <text x={x} y={height - 6} textAnchor="middle" className={adminTw("chart-axis-label")}>{item.label}</text>
           </g>
         })}
       </svg>
@@ -230,7 +230,7 @@ function ScaffoldPanel({ section }) {
     Customers: ['Customer directory', 'Customer activity and account details will be available here.'],
   }
   const [title, description] = details[section]
-  return <section className="admin-scaffold"><span className="admin-scaffold-icon"><DashboardIcon name={navigation.find((item) => item.name === section)?.icon} size={25} /></span><h2>{title}</h2><p>{description}</p><span className="admin-coming-soon">Dashboard preview</span></section>
+  return <section className={adminTw("admin-scaffold")}><span className={adminTw("admin-scaffold-icon")}><DashboardIcon name={navigation.find((item) => item.name === section)?.icon} size={25} /></span><h2>{title}</h2><p>{description}</p><span className={adminTw("admin-coming-soon")}>Dashboard preview</span></section>
 }
 
 export default function StaffDashboard() {
@@ -266,21 +266,21 @@ export default function StaffDashboard() {
   }
 
   return (
-    <div className="admin-dashboard">
-      <button className={`admin-drawer-scrim ${drawerOpen ? 'visible' : ''}`} type="button" aria-label="Close navigation menu" onClick={() => setDrawerOpen(false)} />
-      <aside className={`admin-sidebar ${drawerOpen ? 'drawer-open' : ''}`} aria-label="Staff navigation">
-        <div className="admin-brand">
+    <div className={adminTw("admin-dashboard")}>
+      <button className={adminTw(`admin-drawer-scrim ${drawerOpen ? 'visible' : ''}`)} type="button" aria-label="Close navigation menu" onClick={() => setDrawerOpen(false)} />
+      <aside className={adminTw(`admin-sidebar ${drawerOpen ? 'drawer-open' : ''}`)} aria-label="Staff navigation">
+        <div className={adminTw("admin-brand")}>
           <Logo small />
           <span>CrumblyX</span>
-          <button type="button" className="admin-drawer-close" aria-label="Close menu" onClick={() => setDrawerOpen(false)}><DashboardIcon name="close" /></button>
+          <button type="button" className={adminTw("admin-drawer-close")} aria-label="Close menu" onClick={() => setDrawerOpen(false)}><DashboardIcon name="close" /></button>
         </div>
-        <div className="admin-side-divider" />
-        <nav className="admin-nav" aria-label="Main navigation">
+        <div className={adminTw("admin-side-divider")} />
+        <nav className={adminTw("admin-nav")} aria-label="Main navigation">
           {STAFF_NAVIGATION.map((item) => (
             <button
               type="button"
               key={item.name}
-              className={`admin-nav-item ${activePage === item.name ? 'active' : ''}`}
+              className={adminTw(`admin-nav-item ${activePage === item.name ? 'active' : ''}`)}
               aria-current={activePage === item.name ? 'page' : undefined}
               onClick={() => choosePage(item.name)}
             >
@@ -289,52 +289,52 @@ export default function StaffDashboard() {
             </button>
           ))}
         </nav>
-        <div className="admin-account">
-          <div className="admin-side-divider" />
-          <div className="admin-user">
-            <button type="button" className="admin-avatar admin-avatar-trigger" aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
-            <span className="admin-user-copy"><strong>John Doe</strong><small>doe@example.com</small></span>
-            <button type="button" className="admin-logout" aria-label="Log out" title="Log out" onClick={logout}><DashboardIcon name="logout" size={18} /></button>
+        <div className={adminTw("admin-account")}>
+          <div className={adminTw("admin-side-divider")} />
+          <div className={adminTw("admin-user")}>
+            <button type="button" className={adminTw("admin-avatar admin-avatar-trigger")} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
+            <span className={adminTw("admin-user-copy")}><strong>John Doe</strong><small>doe@example.com</small></span>
+            <button type="button" className={adminTw("admin-logout")} aria-label="Log out" title="Log out" onClick={logout}><DashboardIcon name="logout" size={18} /></button>
           </div>
         </div>
       </aside>
 
-      <main className="admin-main">
-        <header className="admin-topbar">
-          <div className="admin-title-group">
-            <button type="button" className="admin-hamburger" aria-label="Open navigation menu" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}>
+      <main className={adminTw("admin-main")}>
+        <header className={adminTw("admin-topbar")}>
+          <div className={adminTw("admin-title-group")}>
+            <button type="button" className={adminTw("admin-hamburger")} aria-label="Open navigation menu" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}>
               <span /><span /><span />
             </button>
             <DashboardIcon name="dashboard" size={23} />
             <h1>{activePage}</h1>
           </div>
-          <div className="admin-top-actions">
-            <div className="admin-chat-wrap">
-              <button type="button" className="admin-chat-button" aria-label="Customer Chat, 2 unread messages" aria-expanded={chatOpen} onClick={() => setChatOpen((open) => !open)}>
+          <div className={adminTw("admin-top-actions")}>
+            <div className={adminTw("admin-chat-wrap")}>
+              <button type="button" className={adminTw("admin-chat-button")} aria-label="Customer Chat, 2 unread messages" aria-expanded={chatOpen} onClick={() => setChatOpen((open) => !open)}>
                 <DashboardIcon name="chat" size={18} /><span>Customer Chat</span><b aria-hidden="true">2</b>
               </button>
-              {chatOpen && <div className="admin-chat-popover" role="dialog" aria-label="Recent customer chats">
+              {chatOpen && <div className={adminTw("admin-chat-popover")} role="dialog" aria-label="Recent customer chats">
                 <header><strong>Recent chats</strong><button type="button" aria-label="Close chats" onClick={() => setChatOpen(false)}><DashboardIcon name="close" size={17} /></button></header>
-                {DASHBOARD_DATA.chatMessages.map((item) => <article key={item.name}><span className="chat-avatar">{item.name.split(' ').map((part) => part[0]).join('')}</span><div><strong>{item.name}</strong><p>{item.message}</p><small>{item.time}</small></div></article>)}
-                <p className="chat-preview-note">Sample dashboard preview</p>
+                {DASHBOARD_DATA.chatMessages.map((item) => <article key={item.name}><span className={adminTw("chat-avatar")}>{item.name.split(' ').map((part) => part[0]).join('')}</span><div><strong>{item.name}</strong><p>{item.message}</p><small>{item.time}</small></div></article>)}
+                <p className={adminTw("chat-preview-note")}>Sample dashboard preview</p>
               </div>}
             </div>
-            <button type="button" className="admin-avatar top-avatar admin-avatar-trigger" aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
+            <button type="button" className={adminTw("admin-avatar top-avatar admin-avatar-trigger")} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
           </div>
         </header>
         {activePage === 'Dashboard' ? (
-          <div className="admin-content">
-            <div className="dashboard-grid">
-              <ChartCard title="Sales" className="sales-card"><SalesChart /></ChartCard>
+          <div className={adminTw("admin-content")}>
+            <div className={adminTw("dashboard-grid")}>
+              <ChartCard title="Sales" className={adminTw("sales-card")}><SalesChart /></ChartCard>
               <ChartCard title="Resources and Tasks"><ResourcesChart /></ChartCard>
-              <ChartCard title="OLD CUSTOMERS" className="customer-segment-card"><CustomerSegments label="Old customers" data={DASHBOARD_DATA.customers.old} /><div className="segment-caption"><span><i /> Returning</span><span>{DASHBOARD_DATA.customers.old[0]}%</span></div></ChartCard>
-              <ChartCard title="NEW CUSTOMERS" className="customer-segment-card new-customer-segments"><CustomerSegments label="New customers" data={DASHBOARD_DATA.customers.new} /><div className="segment-caption"><span><i /> First-time</span><span>{DASHBOARD_DATA.customers.new[0]}%</span></div></ChartCard>
-              <ChartCard title="Budget"><BudgetChart /><ul className="budget-legend"><li><i />Last month</li><li><i />Current</li></ul></ChartCard>
+              <ChartCard title="OLD CUSTOMERS" className={adminTw("customer-segment-card")}><CustomerSegments label="Old customers" data={DASHBOARD_DATA.customers.old} /><div className={adminTw("segment-caption")}><span><i /> Returning</span><span>{DASHBOARD_DATA.customers.old[0]}%</span></div></ChartCard>
+              <ChartCard title="NEW CUSTOMERS" className={adminTw("customer-segment-card new-customer-segments")}><CustomerSegments label="New customers" data={DASHBOARD_DATA.customers.new} /><div className={adminTw("segment-caption")}><span><i /> First-time</span><span>{DASHBOARD_DATA.customers.new[0]}%</span></div></ChartCard>
+              <ChartCard title="Budget"><BudgetChart /><ul className={adminTw("budget-legend")}><li><i />Last month</li><li><i />Current</li></ul></ChartCard>
               <ChartCard title="New Customers"><ChangeChart /></ChartCard>
             </div>
           </div>
         ) : (
-          <div className="admin-content scaffold-content"><ScaffoldPanel section={activePage} /></div>
+          <div className={adminTw("admin-content scaffold-content")}><ScaffoldPanel section={activePage} /></div>
         )}
       </main>
       {profileOpen && <StaffProfileDialog onClose={closeProfile} />}

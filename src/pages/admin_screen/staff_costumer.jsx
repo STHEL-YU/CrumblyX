@@ -2,10 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Logo } from '../../components/customer_ui.jsx'
 import { DashboardIcon, StaffProfileDialog } from './staff_admin_shared.jsx'
+import { adminTw } from './staff_admin_tw.js'
 import { useStaffProfile } from './staff_profile.js'
 import { STAFF_NAVIGATION } from './staff_navigation.js'
-import './staff_dashboard.css'
-import './staff_customer.css'
 
 const INITIAL_CUSTOMERS = [
   'Maria Santos', 'Juan Dela Cruz', 'Jayson Mancol', 'Luis Garcia',
@@ -55,7 +54,7 @@ function isNewCustomer(customer) {
 
 function CustomerStatus({ status }) {
   const active = status === 'active'
-  return <span className={`staff-customer-status ${active ? 'status-active' : 'status-inactive'}`}><i aria-hidden="true" />{active ? 'Active' : 'Inactive'}</span>
+  return <span className={adminTw(`staff-customer-status inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${active ? 'status-active bg-green-100 text-green-900' : 'status-inactive bg-red-100 text-red-900'}`)}><i className={adminTw("size-2 rounded-full bg-current")} aria-hidden="true" />{active ? 'Active' : 'Inactive'}</span>
 }
 
 function CustomerDialog({ customer, mode, onClose, onModeChange, onSave, onConfirmDelete }) {
@@ -145,28 +144,28 @@ function CustomerDialog({ customer, mode, onClose, onModeChange, onSave, onConfi
   }
 
   return (
-    <div className={`staff-customer-modal-backdrop ${isClosing ? 'is-closing' : ''}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closeDialog() }}>
-      <section ref={dialogRef} className={`staff-customer-modal ${mode.startsWith('details') ? 'customer-details-modal' : ''} ${isClosing ? 'is-closing' : ''}`} role="dialog" aria-modal="true" aria-labelledby="staff-customer-dialog-title">
+    <div className={adminTw(`staff-customer-modal-backdrop ${isClosing ? 'is-closing' : ''}`)} onMouseDown={(event) => { if (event.target === event.currentTarget) closeDialog() }}>
+      <section ref={dialogRef} className={adminTw(`staff-customer-modal max-h-[90dvh] overflow-y-auto rounded-2xl border border-amber-100 bg-white p-6 shadow-2xl ${mode.startsWith('details') ? 'customer-details-modal' : ''} ${isClosing ? 'is-closing' : ''}`)} role="dialog" aria-modal="true" aria-labelledby="staff-customer-dialog-title">
         <header>
           <h2 id="staff-customer-dialog-title">{isDetails ? 'Customer Details' : isDeleting ? 'Delete customer?' : isEditing ? customer?.id ? 'Update Details' : 'Add customer' : 'Edit customer'}</h2>
-          <button type="button" className="staff-customer-modal-close" aria-label="Close customer details" onClick={closeDialog}><DashboardIcon name="close" /></button>
+          <button type="button" className={adminTw("staff-customer-modal-close")} aria-label="Close customer details" onClick={closeDialog}><DashboardIcon name="close" /></button>
         </header>
 
         {isDetails && (
-          <div className="staff-customer-profile">
-            <div className="staff-customer-profile-heading">
+          <div className={adminTw("staff-customer-profile")}>
+            <div className={adminTw("staff-customer-profile-heading")}>
               {customer.photo
-                ? <img className="staff-customer-profile-avatar" src={customer.photo} alt={`${customer.name} profile`} />
-                : <span className="staff-customer-profile-avatar"><DashboardIcon name="person" size={48} /></span>}
+                ? <img className={adminTw("staff-customer-profile-avatar")} src={customer.photo} alt={`${customer.name} profile`} />
+                : <span className={adminTw("staff-customer-profile-avatar")}><DashboardIcon name="person" size={48} /></span>}
               <div><h3>{customer.name}</h3><p>{customer.email}</p></div>
             </div>
-            <dl className="staff-customer-details-list">
+            <dl className={adminTw("staff-customer-details-list")}>
               <div><dt>Contact No.</dt><dd>{customer.phone}</dd></div>
               <div><dt>Location</dt><dd>{customer.location || 'Not provided'}</dd></div>
             </dl>
-            <div className="staff-customer-detail-actions">
-              <button className="staff-customer-update-button" type="button" onClick={() => onModeChange('details-edit')}><DashboardIcon name="edit" size={16} />Update Details</button>
-              <button className="staff-customer-delete-button" type="button" onClick={() => onModeChange('delete-confirm')}><DashboardIcon name="trash" size={16} />Delete Customer</button>
+            <div className={adminTw("staff-customer-detail-actions")}>
+              <button className={adminTw("staff-customer-update-button")} type="button" onClick={() => onModeChange('details-edit')}><DashboardIcon name="edit" size={16} />Update Details</button>
+              <button className={adminTw("staff-customer-delete-button")} type="button" onClick={() => onModeChange('delete-confirm')}><DashboardIcon name="trash" size={16} />Delete Customer</button>
             </div>
           </div>
         )}
@@ -177,21 +176,21 @@ function CustomerDialog({ customer, mode, onClose, onModeChange, onSave, onConfi
             <label>Email address<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} maxLength={254} /></label>
             <label>Phone number<input type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} maxLength={15} placeholder="0917 123 4567" /></label>
             <label>Location<input autoComplete="address-level2" value={location} onChange={(event) => setLocation(event.target.value)} maxLength={120} placeholder="City or municipality" /></label>
-            <label className="staff-customer-switch-label">Customer status
-              <span className="staff-customer-switch-copy"><span>{status === 'active' ? 'Active' : 'Inactive'}</span><input type="checkbox" role="switch" checked={status === 'active'} onChange={(event) => setStatus(event.target.checked ? 'active' : 'inactive')} /><i aria-hidden="true" /></span>
+            <label className={adminTw("staff-customer-switch-label")}>Customer status
+              <span className={adminTw("staff-customer-switch-copy")}><span>{status === 'active' ? 'Active' : 'Inactive'}</span><input type="checkbox" role="switch" checked={status === 'active'} onChange={(event) => setStatus(event.target.checked ? 'active' : 'inactive')} /><i aria-hidden="true" /></span>
             </label>
-            {error && <p className="staff-customer-form-error" role="alert">{error}</p>}
-            <div className="staff-customer-form-actions">
-              <button className="staff-customer-secondary" type="button" onClick={() => isDetailsEdit ? onModeChange('details') : closeDialog()}>Cancel</button>
-              <button className="staff-customer-primary" type="submit">{customer.id ? 'Save changes' : 'Add customer'}</button>
+            {error && <p className={adminTw("staff-customer-form-error")} role="alert">{error}</p>}
+            <div className={adminTw("staff-customer-form-actions")}>
+              <button className={adminTw("staff-customer-secondary")} type="button" onClick={() => isDetailsEdit ? onModeChange('details') : closeDialog()}>Cancel</button>
+              <button className={adminTw("staff-customer-primary")} type="submit">{customer.id ? 'Save changes' : 'Add customer'}</button>
             </div>
           </form>
         )}
 
         {isDeleting && (
-          <div className="staff-customer-delete-confirm">
+          <div className={adminTw("staff-customer-delete-confirm")}>
             <p>Delete <strong>{customer.name}</strong>? This can’t be undone.</p>
-            <div><button className="staff-customer-secondary" type="button" onClick={() => mode === 'details-delete-confirm' ? onModeChange('details') : closeDialog()}>Cancel</button><button className="staff-customer-danger" type="button" onClick={confirmDelete}>Delete customer</button></div>
+            <div><button className={adminTw("staff-customer-secondary")} type="button" onClick={() => mode === 'details-delete-confirm' ? onModeChange('details') : closeDialog()}>Cancel</button><button className={adminTw("staff-customer-danger")} type="button" onClick={confirmDelete}>Delete customer</button></div>
           </div>
         )}
       </section>
@@ -201,9 +200,9 @@ function CustomerDialog({ customer, mode, onClose, onModeChange, onSave, onConfi
 
 function SummaryCard({ label, value, icon, tone, selected, onClick }) {
   return (
-    <button type="button" className={`staff-customer-summary-card ${selected ? 'selected' : ''}`} aria-pressed={selected} onClick={onClick}>
-      <span className={`staff-customer-summary-icon tone-${tone}`}><DashboardIcon name={icon} size={20} /></span>
-      <span className="staff-customer-summary-label">{label}</span>
+    <button type="button" className={adminTw(`staff-customer-summary-card rounded-2xl border border-amber-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${selected ? 'selected' : ''}`)} aria-pressed={selected} onClick={onClick}>
+      <span className={adminTw(`staff-customer-summary-icon tone-${tone}`)}><DashboardIcon name={icon} size={20} /></span>
+      <span className={adminTw("staff-customer-summary-label")}>{label}</span>
       <strong>{value}</strong>
     </button>
   )
@@ -315,7 +314,7 @@ export default function StaffCustomers() {
 
   function sortLabel(label, key) {
     const current = sort.key === key
-    return <button className="staff-customer-sort" type="button" onClick={() => sortBy(key)} aria-label={`Sort by ${label}${current ? `, ${sort.direction === 'asc' ? 'ascending' : 'descending'}` : ''}`}>{label}<span aria-hidden="true">{current ? (sort.direction === 'asc' ? '↑' : '↓') : '↕'}</span></button>
+    return <button className={adminTw("staff-customer-sort")} type="button" onClick={() => sortBy(key)} aria-label={`Sort by ${label}${current ? `, ${sort.direction === 'asc' ? 'ascending' : 'descending'}` : ''}`}>{label}<span aria-hidden="true">{current ? (sort.direction === 'asc' ? '↑' : '↓') : '↕'}</span></button>
   }
 
   function logout() {
@@ -329,69 +328,69 @@ export default function StaffCustomers() {
   }
 
   return (
-    <div className="admin-dashboard staff-customer-app">
-      <button className={`admin-drawer-scrim ${drawerOpen ? 'visible' : ''}`} type="button" aria-label="Close navigation menu" onClick={() => setDrawerOpen(false)} />
-      <aside className={`admin-sidebar ${drawerOpen ? 'drawer-open' : ''}`} aria-label="Staff navigation">
-        <div className="admin-brand"><Logo small /><span>CrumblyX</span><button type="button" className="admin-drawer-close" aria-label="Close menu" onClick={() => setDrawerOpen(false)}><DashboardIcon name="close" /></button></div>
-        <div className="admin-side-divider" />
-        <nav className="admin-nav" aria-label="Main navigation">
+    <div className={adminTw("admin-dashboard staff-customer-app")}>
+      <button className={adminTw(`admin-drawer-scrim ${drawerOpen ? 'visible' : ''}`)} type="button" aria-label="Close navigation menu" onClick={() => setDrawerOpen(false)} />
+      <aside className={adminTw(`admin-sidebar ${drawerOpen ? 'drawer-open' : ''}`)} aria-label="Staff navigation">
+        <div className={adminTw("admin-brand")}><Logo small /><span>CrumblyX</span><button type="button" className={adminTw("admin-drawer-close")} aria-label="Close menu" onClick={() => setDrawerOpen(false)}><DashboardIcon name="close" /></button></div>
+        <div className={adminTw("admin-side-divider")} />
+        <nav className={adminTw("admin-nav")} aria-label="Main navigation">
           {STAFF_NAVIGATION.map((item) => (
-            <button type="button" key={item.name} className={`admin-nav-item ${item.name === 'Customers' ? 'active' : ''}`} aria-current={item.name === 'Customers' ? 'page' : undefined} onClick={() => navigateSection(item.name)}>
+            <button type="button" key={item.name} className={adminTw(`admin-nav-item ${item.name === 'Customers' ? 'active' : ''}`)} aria-current={item.name === 'Customers' ? 'page' : undefined} onClick={() => navigateSection(item.name)}>
               <DashboardIcon name={item.icon} /><span>{item.name}</span>
             </button>
           ))}
         </nav>
-        <div className="admin-account"><div className="admin-side-divider" /><div className="admin-user"><button type="button" className="admin-avatar admin-avatar-trigger" aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button><span className="admin-user-copy"><strong>John Doe</strong><small>doe@example.com</small></span><button type="button" className="admin-logout" aria-label="Log out" title="Log out" onClick={logout}><DashboardIcon name="logout" size={18} /></button></div></div>
+        <div className={adminTw("admin-account")}><div className={adminTw("admin-side-divider")} /><div className={adminTw("admin-user")}><button type="button" className={adminTw("admin-avatar admin-avatar-trigger")} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button><span className={adminTw("admin-user-copy")}><strong>John Doe</strong><small>doe@example.com</small></span><button type="button" className={adminTw("admin-logout")} aria-label="Log out" title="Log out" onClick={logout}><DashboardIcon name="logout" size={18} /></button></div></div>
       </aside>
 
-      <main className="admin-main staff-customer-main">
-        <header className="admin-topbar">
-          <div className="admin-title-group">
-            <button type="button" className="admin-hamburger" aria-label="Open navigation menu" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}><span /><span /><span /></button>
+      <main className={adminTw("admin-main staff-customer-main")}>
+        <header className={adminTw("admin-topbar")}>
+          <div className={adminTw("admin-title-group")}>
+            <button type="button" className={adminTw("admin-hamburger")} aria-label="Open navigation menu" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}><span /><span /><span /></button>
             <DashboardIcon name="customers" size={24} /><h1>Customers</h1>
           </div>
-          <div className="admin-top-actions">
-            <div className="admin-chat-wrap">
-              <button type="button" className="admin-chat-button" aria-label="Customer Chat, 2 unread messages" aria-expanded={chatOpen} onClick={() => setChatOpen((open) => !open)}><DashboardIcon name="chat" size={18} /><span>Customer Chat</span><b aria-hidden="true">2</b></button>
-              {chatOpen && <div className="admin-chat-popover" role="dialog" aria-label="Customer chat preview"><header><strong>Customer Chat</strong><button type="button" aria-label="Close chats" onClick={() => setChatOpen(false)}><DashboardIcon name="close" size={17} /></button></header><p className="staff-customer-chat-note">2 unread customer messages</p></div>}
+          <div className={adminTw("admin-top-actions")}>
+            <div className={adminTw("admin-chat-wrap")}>
+              <button type="button" className={adminTw("admin-chat-button")} aria-label="Customer Chat, 2 unread messages" aria-expanded={chatOpen} onClick={() => setChatOpen((open) => !open)}><DashboardIcon name="chat" size={18} /><span>Customer Chat</span><b aria-hidden="true">2</b></button>
+              {chatOpen && <div className={adminTw("admin-chat-popover")} role="dialog" aria-label="Customer chat preview"><header><strong>Customer Chat</strong><button type="button" aria-label="Close chats" onClick={() => setChatOpen(false)}><DashboardIcon name="close" size={17} /></button></header><p className={adminTw("staff-customer-chat-note")}>2 unread customer messages</p></div>}
             </div>
-            <button type="button" className="admin-avatar top-avatar admin-avatar-trigger" aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
+            <button type="button" className={adminTw("admin-avatar top-avatar admin-avatar-trigger")} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
           </div>
         </header>
 
-        <div className="staff-customer-content">
-          <section className="staff-customer-search-banner" aria-label="Search customers">
-            <label className="staff-customer-search">
+        <div className={adminTw("staff-customer-content")}>
+          <section className={adminTw("staff-customer-search-banner")} aria-label="Search customers">
+            <label className={adminTw("staff-customer-search")}>
               <DashboardIcon name="search" size={19} />
-              <span className="visually-hidden">Search customers by ID, name, email, or phone</span>
+              <span className={adminTw("visually-hidden")}>Search customers by ID, name, email, or phone</span>
               <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Customer..." />
               {query && <button type="button" aria-label="Clear search" onClick={() => setQuery('')}><DashboardIcon name="close" size={15} /></button>}
             </label>
-            <button type="button" className="staff-customer-add-button" onClick={(event) => openDialog('edit', { id: '', name: '', email: '', phone: '', location: '', status: 'active', joinedAt: new Date().toISOString(), recentOrders: [] }, event)}><DashboardIcon name="plus" size={16} />Add Customer</button>
+            <button type="button" className={adminTw("staff-customer-add-button")} onClick={(event) => openDialog('edit', { id: '', name: '', email: '', phone: '', location: '', status: 'active', joinedAt: new Date().toISOString(), recentOrders: [] }, event)}><DashboardIcon name="plus" size={16} />Add Customer</button>
           </section>
 
-          <section className="staff-customer-dashboard-content" aria-label="Customer overview">
-            <div className="staff-customer-summary-grid" aria-live="polite">
+          <section className={adminTw("staff-customer-dashboard-content")} aria-label="Customer overview">
+            <div className={adminTw("staff-customer-summary-grid")} aria-live="polite">
               {CUSTOMER_FILTERS.map((card) => (
                 <SummaryCard key={card.filter} {...card} value={counts[card.filter === 'all' ? 'total' : card.filter]} selected={filter === card.filter} onClick={() => setFilter((current) => card.filter === 'all' || current === card.filter ? 'all' : card.filter)} />
               ))}
             </div>
 
-            <section className="staff-customer-table-section" aria-labelledby="staff-customer-table-title">
-              <div className="staff-customer-table-heading">
+            <section className={adminTw("staff-customer-table-section")} aria-labelledby="staff-customer-table-title">
+              <div className={adminTw("staff-customer-table-heading")}>
                 <h2 id="staff-customer-table-title" tabIndex="-1">Customer Directory</h2>
                 <span>{visibleCustomers.length} {visibleCustomers.length === 1 ? 'customer' : 'customers'}</span>
               </div>
-              <div className="staff-customer-table-wrap">
-                <table className="staff-customer-table">
-                  <caption className="visually-hidden">CrumblyX customer directory and account actions</caption>
+              <div className={adminTw("staff-customer-table-wrap overflow-x-auto rounded-2xl border border-amber-100 bg-white shadow-sm")}>
+                <table className={adminTw("staff-customer-table")}>
+                  <caption className={adminTw("visually-hidden")}>CrumblyX customer directory and account actions</caption>
                   <thead><tr>
                     <th scope="col">{sortLabel('ID', 'id')}</th>
                     <th scope="col">{sortLabel('NAME', 'name')}</th>
                     <th scope="col">{sortLabel('EMAIL', 'email')}</th>
                     <th scope="col">{sortLabel('PHONE', 'phone')}</th>
                     <th scope="col">{sortLabel('STATUS', 'status')}</th>
-                    <th scope="col"><span className="staff-customer-actions-heading">ACTIONS</span></th>
+                    <th scope="col"><span className={adminTw("staff-customer-actions-heading")}>ACTIONS</span></th>
                   </tr></thead>
                   <tbody>
                     {visibleCustomers.map((customer) => (
@@ -399,16 +398,16 @@ export default function StaffCustomers() {
                         <td data-label="ID">{customer.id}</td>
                         <th scope="row" data-label="Name">{customer.name}</th>
                         <td data-label="Email">{customer.email}</td>
-                        <td className="staff-customer-phone" data-label="Phone">{customer.phone}</td>
+                        <td className={adminTw("staff-customer-phone")} data-label="Phone">{customer.phone}</td>
                         <td data-label="Status"><CustomerStatus status={customer.status} /></td>
-                        <td data-label="Actions"><div className="staff-customer-row-actions">
+                        <td data-label="Actions"><div className={adminTw("staff-customer-row-actions")}>
                           <button type="button" aria-label={`View ${customer.name}`} title={`View ${customer.name}`} onClick={(event) => openDialog('details', customer, event)}><DashboardIcon name="eye" size={15} /></button>
                           <button type="button" aria-label={`Edit ${customer.name}`} title={`Edit ${customer.name}`} onClick={(event) => openDialog('edit', customer, event)}><DashboardIcon name="edit" size={15} /></button>
                           <button type="button" aria-label={`Delete ${customer.name}`} title={`Delete ${customer.name}`} onClick={(event) => openDialog('delete-confirm', customer, event)}><DashboardIcon name="trash" size={15} /></button>
                         </div></td>
                       </tr>
                     ))}
-                    {visibleCustomers.length === 0 && <tr className="staff-customer-empty-row"><td colSpan="6"><span><DashboardIcon name="search" size={20} /></span><strong>No customers found</strong><small>Try a different search or filter.</small></td></tr>}
+                    {visibleCustomers.length === 0 && <tr className={adminTw("staff-customer-empty-row")}><td colSpan="6"><span><DashboardIcon name="search" size={20} /></span><strong>No customers found</strong><small>Try a different search or filter.</small></td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -418,7 +417,7 @@ export default function StaffCustomers() {
       </main>
 
       {dialog && <CustomerDialog key={`${dialog.mode}-${dialog.customer.id}`} customer={dialog.customer} mode={dialog.mode} onClose={closeDialog} onModeChange={(mode) => setDialog((current) => current ? { ...current, mode } : current)} onSave={handleSave} onConfirmDelete={confirmDelete} />}
-      {toast && <div className="staff-customer-toast" role="status"><span>{toast.message}</span>{toast.canUndo && <button type="button" onClick={undoDelete}>Undo</button>}</div>}
+      {toast && <div className={adminTw("staff-customer-toast")} role="status"><span>{toast.message}</span>{toast.canUndo && <button type="button" onClick={undoDelete}>Undo</button>}</div>}
       {profileOpen && <StaffProfileDialog onClose={closeProfile} />}
     </div>
   )

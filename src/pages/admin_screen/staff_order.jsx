@@ -2,69 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Logo } from '../../components/customer_ui.jsx'
 import { DashboardIcon, StaffProfileDialog } from './staff_admin_shared.jsx'
+import { adminTw } from './staff_admin_tw.js'
 import { useStaffProfile } from './staff_profile.js'
 import { STAFF_NAVIGATION } from './staff_navigation.js'
-import './staff_dashboard.css'
-import './staff_order.css'
-
-const INITIAL_ORDERS = [
-  {
-    id: 'ORD-001',
-    orderType: 'Table 3',
-    timeAgo: '20 min ago',
-    total: 350,
-    status: 'new',
-    notes: 'Please bring to the table when ready.',
-    items: Array.from({ length: 5 }, (_, index) => ({
-      id: `ord-001-item-${index + 1}`,
-      name: 'Matcha Cookies',
-      quantity: 1,
-      checked: false,
-    })),
-  },
-  {
-    id: 'ORD-002',
-    orderType: 'Take out',
-    timeAgo: '20 min ago',
-    total: 50,
-    status: 'preparing',
-    notes: 'Customer will collect at the counter.',
-    items: Array.from({ length: 5 }, (_, index) => ({
-      id: `ord-002-item-${index + 1}`,
-      name: 'Matcha Cookies',
-      quantity: 1,
-      checked: index < 2,
-    })),
-  },
-  {
-    id: 'ORD-003',
-    orderType: 'Table 7',
-    timeAgo: '12 min ago',
-    total: 250,
-    status: 'preparing',
-    notes: 'One item is for a guest with a nut allergy.',
-    items: Array.from({ length: 5 }, (_, index) => ({
-      id: `ord-003-item-${index + 1}`,
-      name: 'Matcha Cookies',
-      quantity: 1,
-      checked: index < 3,
-    })),
-  },
-  {
-    id: 'ORD-004',
-    orderType: 'Take out',
-    timeAgo: '5 min ago',
-    total: 150,
-    status: 'ready',
-    notes: 'Pickup at the front counter.',
-    items: Array.from({ length: 5 }, (_, index) => ({
-      id: `ord-004-item-${index + 1}`,
-      name: 'Matcha Cookies',
-      quantity: 1,
-      checked: true,
-    })),
-  },
-]
 
 const FILTERS = [
   { status: 'new', label: 'New' },
@@ -80,6 +20,36 @@ const STATUS_LABELS = {
   completed: 'Completed',
 }
 
+async function orderRequest(action, method = 'GET', body, signal) {
+  const response = await fetch(`/api/orders/${action}`, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+    signal,
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data.error || 'Order request failed.')
+  return data
+}
+
+function normalizeOrder(order) {
+  const createdAt = new Date(order.createdAt)
+  const elapsed = Math.max(0, Math.floor((Date.now() - createdAt.getTime()) / 60000))
+  const timeAgo = Number.isNaN(createdAt.getTime())
+    ? ''
+    : elapsed < 1 ? 'Just now' : elapsed < 60 ? `${elapsed} min ago` : `${Math.floor(elapsed / 60)} hr ago`
+  return {
+    ...order,
+    total: Number(order.total),
+    timeAgo,
+    items: order.items.map((item) => ({ ...item, checked: Boolean(item.checked) })),
+  }
+}
+
+function replaceOrder(orders, updatedOrder) {
+  return orders.map((order) => order.id === updatedOrder.id ? updatedOrder : order)
+}
+
 function OrderCard({ order, onToggleItem, onAdvance, onViewDetails }) {
   const completedItems = order.items.filter((item) => item.checked).length
   const progress = Math.round(completedItems / order.items.length * 100)
@@ -90,25 +60,25 @@ function OrderCard({ order, onToggleItem, onAdvance, onViewDetails }) {
   }[order.status]
 
   return (
-    <article className="staff-order-row" key={`${order.id}-${order.status}`}>
-      <div className="staff-order-left">
-        <div className="staff-order-id-line">
+    <article className={adminTw("staff-order-row rounded-2xl border border-amber-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md")} key={`${order.id}-${order.status}`}>
+      <div className={adminTw("staff-order-left")}>
+        <div className={adminTw("staff-order-id-line")}>
           <h3>#{order.id}</h3>
-          <span className={`staff-order-pill order-status-${order.status}`}>
+          <span className={adminTw(`staff-order-pill order-status-${order.status}`)}>
             {order.status === 'preparing' && <i aria-hidden="true" />}
             {STATUS_LABELS[order.status]}
           </span>
         </div>
-        <div className="staff-order-meta">
+        <div className={adminTw("staff-order-meta")}>
           <span><DashboardIcon name={order.orderType === 'Take out' ? 'menu' : 'orders'} size={15} />{order.orderType}</span>
           <i aria-hidden="true" />
           <span>{order.timeAgo}</span>
           <i aria-hidden="true" />
           <strong>₱{order.total}</strong>
         </div>
-        <div className="staff-order-items-checklist">
+        <div className={adminTw("staff-order-items-checklist")}>
           {order.items.map((item, index) => (
-            <label className={`staff-order-check ${item.checked ? 'checked' : ''}`} key={item.id}>
+            <label className={adminTw(`staff-order-check ${item.checked ? 'checked' : ''}`)} key={item.id}>
               <input
                 type="checkbox"
                 checked={item.checked}
@@ -116,20 +86,20 @@ function OrderCard({ order, onToggleItem, onAdvance, onViewDetails }) {
                 onChange={() => onToggleItem(order.id, item.id)}
                 aria-label={`${item.name}, item ${index + 1} of ${order.items.length}`}
               />
-              <span className="staff-order-checkbox" aria-hidden="true"><DashboardIcon name="check" size={13} /></span>
+              <span className={adminTw("staff-order-checkbox")} aria-hidden="true"><DashboardIcon name="check" size={13} /></span>
               <span>{item.quantity > 1 ? `${item.quantity} × ` : ''}{item.name}</span>
             </label>
           ))}
         </div>
       </div>
 
-      <div className="staff-order-right">
-        <div className="staff-order-progress-copy">
+      <div className={adminTw("staff-order-right")}>
+        <div className={adminTw("staff-order-progress-copy")}>
           <span>{completedItems} of {order.items.length} items completed</span>
           <span>{progress}%</span>
         </div>
         <div
-          className="staff-order-progress"
+          className={adminTw("staff-order-progress")}
           role="progressbar"
           aria-label={`${order.id} preparation progress`}
           aria-valuemin={0}
@@ -139,11 +109,11 @@ function OrderCard({ order, onToggleItem, onAdvance, onViewDetails }) {
         >
           <span style={{ width: `${progress}%` }} />
         </div>
-        <div className="staff-order-actions">
-          <button className="staff-order-details" type="button" onClick={() => onViewDetails(order)}>View order details</button>
+        <div className={adminTw("staff-order-actions")}>
+          <button className={adminTw("staff-order-details")} type="button" onClick={() => onViewDetails(order)}>View order details</button>
           {actionLabel && (
             <button
-              className="staff-order-primary"
+              className={adminTw("staff-order-primary")}
               type="button"
               disabled={order.status === 'preparing' && completedItems !== order.items.length}
               onClick={() => onAdvance(order)}
@@ -184,32 +154,35 @@ function OrderDetailsDialog({ order, onClose }) {
   }, [onClose])
 
   return (
-    <div className="staff-order-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section ref={dialogRef} className="staff-order-modal" role="dialog" aria-modal="true" aria-labelledby="staff-order-dialog-title">
+    <div className={adminTw("staff-order-modal-backdrop")} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <section ref={dialogRef} className={adminTw("staff-order-modal max-h-[90dvh] overflow-y-auto rounded-2xl border border-amber-100 bg-white p-6 shadow-2xl")} role="dialog" aria-modal="true" aria-labelledby="staff-order-dialog-title">
         <header>
           <div><span>ORDER DETAILS</span><h2 id="staff-order-dialog-title">#{order.id}</h2></div>
           <button type="button" aria-label="Close order details" onClick={onClose}><DashboardIcon name="close" /></button>
         </header>
-        <div className="staff-order-modal-meta">
-          <span className={`staff-order-pill order-status-${order.status}`}>{STATUS_LABELS[order.status]}</span>
+        <div className={adminTw("staff-order-modal-meta")}>
+          <span className={adminTw(`staff-order-pill order-status-${order.status}`)}>{STATUS_LABELS[order.status]}</span>
           <span>{order.orderType}</span><span>{order.timeAgo}</span>
         </div>
         <h3>Items</h3>
-        <ul className="staff-order-modal-items">
+        <ul className={adminTw("staff-order-modal-items")}>
           {order.items.map((item) => (
             <li key={item.id}><span>{item.quantity} × {item.name}</span><span>{item.checked ? 'Prepared' : 'Pending'}</span></li>
           ))}
         </ul>
-        <div className="staff-order-modal-note"><strong>Order notes</strong><p>{order.notes || 'No special instructions.'}</p></div>
-        <div className="staff-order-modal-total"><span>Total</span><strong>₱{order.total.toFixed(2)}</strong></div>
-        <button className="staff-order-modal-close" type="button" onClick={onClose}>Close details</button>
+        <div className={adminTw("staff-order-modal-note")}><strong>Order notes</strong><p>{order.notes || 'No special instructions.'}</p></div>
+        <div className={adminTw("staff-order-modal-total")}><span>Total</span><strong>₱{order.total.toFixed(2)}</strong></div>
+        <button className={adminTw("staff-order-modal-close")} type="button" onClick={onClose}>Close details</button>
       </section>
     </div>
   )
 }
 
 export default function StaffOrders() {
-  const [orders, setOrders] = useState(INITIAL_ORDERS)
+  const [orders, setOrders] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [refreshKey, setRefreshKey] = useState(0)
   const [filter, setFilter] = useState('all')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -218,6 +191,22 @@ export default function StaffOrders() {
   const [section, setSection] = useState('Orders')
   const navigate = useNavigate()
 
+  useEffect(() => {
+    const controller = new AbortController()
+    orderRequest('list', 'GET', undefined, controller.signal)
+      .then((data) => {
+        if (!Array.isArray(data.orders)) throw new Error('Invalid orders response.')
+        if (!controller.signal.aborted) setOrders(data.orders.map(normalizeOrder))
+      })
+      .catch((requestError) => {
+        if (!controller.signal.aborted) setError(requestError.message)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+    return () => controller.abort()
+  }, [refreshKey])
+
   const counts = FILTERS.reduce((result, item) => {
     result[item.status] = orders.filter((order) => order.status === item.status).length
     return result
@@ -225,18 +214,42 @@ export default function StaffOrders() {
 
   const visibleOrders = filter === 'all' ? orders : orders.filter((order) => order.status === filter)
 
-  function toggleItem(orderId, itemId) {
-    setOrders((current) => current.map((order) => order.id === orderId
-      ? { ...order, items: order.items.map((item) => item.id === itemId ? { ...item, checked: !item.checked } : item) }
-      : order))
+  async function toggleItem(orderId, itemId) {
+    const order = orders.find((item) => item.id === orderId)
+    const item = order?.items.find((entry) => entry.id === itemId)
+    if (!order || !item) return
+    try {
+      const updatedOrder = normalizeOrder(await orderRequest('update', 'PUT', {
+        id: orderId,
+        itemId,
+        checked: !item.checked,
+      }))
+      setOrders((current) => replaceOrder(current, updatedOrder))
+      setSelectedOrder((current) => current?.id === updatedOrder.id ? updatedOrder : current)
+      setError('')
+    } catch (requestError) {
+      setError(requestError.message)
+    }
   }
 
-  function advanceOrder(order) {
+  async function advanceOrder(order) {
     const nextStatus = { new: 'preparing', preparing: 'ready', ready: 'completed' }[order.status]
     if (!nextStatus) return
     if (order.status === 'preparing' && order.items.some((item) => !item.checked)) return
-    setOrders((current) => current.map((item) => item.id === order.id ? { ...item, status: nextStatus } : item))
-    setSelectedOrder((current) => current?.id === order.id ? { ...current, status: nextStatus } : current)
+    try {
+      const updatedOrder = normalizeOrder(await orderRequest('update', 'PUT', { id: order.id, status: nextStatus }))
+      setOrders((current) => replaceOrder(current, updatedOrder))
+      setSelectedOrder((current) => current?.id === updatedOrder.id ? updatedOrder : current)
+      setError('')
+    } catch (requestError) {
+      setError(requestError.message)
+    }
+  }
+
+  function refreshOrders() {
+    setLoading(true)
+    setError('')
+    setRefreshKey((current) => current + 1)
   }
 
   function logout() {
@@ -269,20 +282,20 @@ export default function StaffOrders() {
   }
 
   return (
-    <div className="admin-dashboard staff-orders-app">
-      <button className={`admin-drawer-scrim ${drawerOpen ? 'visible' : ''}`} type="button" aria-label="Close navigation menu" onClick={() => setDrawerOpen(false)} />
-      <aside className={`admin-sidebar ${drawerOpen ? 'drawer-open' : ''}`} aria-label="Staff navigation">
-        <div className="admin-brand">
+    <div className={adminTw("admin-dashboard staff-orders-app")}>
+      <button className={adminTw(`admin-drawer-scrim ${drawerOpen ? 'visible' : ''}`)} type="button" aria-label="Close navigation menu" onClick={() => setDrawerOpen(false)} />
+      <aside className={adminTw(`admin-sidebar ${drawerOpen ? 'drawer-open' : ''}`)} aria-label="Staff navigation">
+        <div className={adminTw("admin-brand")}>
           <Logo small /><span>CrumblyX</span>
-          <button type="button" className="admin-drawer-close" aria-label="Close menu" onClick={() => setDrawerOpen(false)}><DashboardIcon name="close" /></button>
+          <button type="button" className={adminTw("admin-drawer-close")} aria-label="Close menu" onClick={() => setDrawerOpen(false)}><DashboardIcon name="close" /></button>
         </div>
-        <div className="admin-side-divider" />
-        <nav className="admin-nav" aria-label="Main navigation">
+        <div className={adminTw("admin-side-divider")} />
+        <nav className={adminTw("admin-nav")} aria-label="Main navigation">
           {STAFF_NAVIGATION.map((item) => (
             <button
               type="button"
               key={item.name}
-              className={`admin-nav-item ${section === item.name ? 'active' : ''}`}
+              className={adminTw(`admin-nav-item ${section === item.name ? 'active' : ''}`)}
               aria-current={section === item.name ? 'page' : undefined}
               onClick={() => navigateSection(item.name)}
             >
@@ -290,41 +303,55 @@ export default function StaffOrders() {
             </button>
           ))}
         </nav>
-        <div className="admin-account">
-          <div className="admin-side-divider" />
-          <div className="admin-user">
-            <button type="button" className="admin-avatar admin-avatar-trigger" aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
-            <span className="admin-user-copy"><strong>John Doe</strong><small>doe@example.com</small></span>
-            <button type="button" className="admin-logout" aria-label="Log out" title="Log out" onClick={logout}><DashboardIcon name="logout" size={18} /></button>
+        <div className={adminTw("admin-account")}>
+          <div className={adminTw("admin-side-divider")} />
+          <div className={adminTw("admin-user")}>
+            <button type="button" className={adminTw("admin-avatar admin-avatar-trigger")} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
+            <span className={adminTw("admin-user-copy")}><strong>John Doe</strong><small>doe@example.com</small></span>
+            <button type="button" className={adminTw("admin-logout")} aria-label="Log out" title="Log out" onClick={logout}><DashboardIcon name="logout" size={18} /></button>
           </div>
         </div>
       </aside>
 
-      <main className="admin-main staff-orders-main">
-        <header className="admin-topbar">
-          <div className="admin-title-group">
-            <button type="button" className="admin-hamburger" aria-label="Open navigation menu" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}><span /><span /><span /></button>
+      <main className={adminTw("admin-main staff-orders-main")}>
+        <header className={adminTw("admin-topbar")}>
+          <div className={adminTw("admin-title-group")}>
+            <button type="button" className={adminTw("admin-hamburger")} aria-label="Open navigation menu" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}><span /><span /><span /></button>
             <DashboardIcon name="orders" size={23} />
             <h1>{section}</h1>
           </div>
-          <div className="admin-top-actions">
-            <div className="admin-chat-wrap">
-              <button type="button" className="admin-chat-button" aria-label="Customer Chat, 2 unread messages" aria-expanded={chatOpen} onClick={() => setChatOpen((open) => !open)}>
+          <div className={adminTw("admin-top-actions")}>
+            <div className={adminTw("admin-chat-wrap")}>
+              <button type="button" className={adminTw("admin-chat-button")} aria-label="Customer Chat, 2 unread messages" aria-expanded={chatOpen} onClick={() => setChatOpen((open) => !open)}>
                 <DashboardIcon name="chat" size={18} /><span>Customer Chat</span><b aria-hidden="true">2</b>
               </button>
-              {chatOpen && <div className="admin-chat-popover" role="dialog" aria-label="Customer chat preview"><header><strong>Customer Chat</strong><button type="button" aria-label="Close chats" onClick={() => setChatOpen(false)}><DashboardIcon name="close" size={17} /></button></header><p className="staff-orders-chat-note">2 unread customer messages</p></div>}
+              {chatOpen && <div className={adminTw("admin-chat-popover")} role="dialog" aria-label="Customer chat preview"><header><strong>Customer Chat</strong><button type="button" aria-label="Close chats" onClick={() => setChatOpen(false)}><DashboardIcon name="close" size={17} /></button></header><p className={adminTw("staff-orders-chat-note")}>2 unread customer messages</p></div>}
             </div>
-            <button type="button" className="admin-avatar top-avatar admin-avatar-trigger" aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
+            <button type="button" className={adminTw("admin-avatar top-avatar admin-avatar-trigger")} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
           </div>
         </header>
 
         {section === 'Orders' ? (
-          <div className="staff-orders-content">
-            <section className="staff-order-summary" aria-label="Order status summary" aria-live="polite">
+          <div className={adminTw("staff-orders-content")}>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-stone-600" aria-live="polite">
+                {orders.length} {orders.length === 1 ? 'order' : 'orders'} total
+              </p>
+              <button
+                type="button"
+                className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-700 transition hover:bg-stone-50 disabled:opacity-60"
+                onClick={refreshOrders}
+                disabled={loading}
+              >
+                {loading ? 'Loading…' : 'Refresh'}
+              </button>
+            </div>
+            {error && <p className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert">{error}</p>}
+            <section className={adminTw("staff-order-summary")} aria-label="Order status summary" aria-live="polite">
               {FILTERS.map((item) => (
                 <button
                   type="button"
-                  className={`staff-order-stat ${filter === item.status ? 'selected' : ''}`}
+                  className={adminTw(`staff-order-stat ${filter === item.status ? 'selected' : ''}`)}
                   key={item.status}
                   aria-pressed={filter === item.status}
                   onClick={() => setFilter((current) => current === item.status ? 'all' : item.status)}
@@ -334,19 +361,21 @@ export default function StaffOrders() {
               ))}
             </section>
 
-            <section className="staff-order-list-section" aria-labelledby="staff-order-list-title">
-              <div className="staff-order-section-heading">
+            <section className={adminTw("staff-order-list-section")} aria-labelledby="staff-order-list-title">
+              <div className={adminTw("staff-order-section-heading")}>
                 <div>
                   <h2 id="staff-order-list-title">{filter === 'all' || filter === 'new' ? 'New Orders' : `${STATUS_LABELS[filter]} Orders`}</h2>
                   <p><DashboardIcon name="orders" size={16} />Check each item as it is prepared. Complete the order when everything is ready.</p>
                 </div>
-                {filter !== 'all' && <button type="button" className="staff-order-clear-filter" onClick={() => setFilter('all')}>Show all</button>}
+                {filter !== 'all' && <button type="button" className={adminTw("staff-order-clear-filter")} onClick={() => setFilter('all')}>Show all</button>}
               </div>
 
-              {visibleOrders.length === 0 ? (
-                <div className="staff-order-empty"><DashboardIcon name="orders" size={27} /><h3>No {filter === 'all' ? '' : STATUS_LABELS[filter].toLowerCase()} orders</h3><p>Orders in this status will show here.</p></div>
+              {loading && orders.length === 0 ? (
+                <div className={adminTw("staff-order-empty")} role="status"><h3>Loading orders…</h3></div>
+              ) : visibleOrders.length === 0 ? (
+                <div className={adminTw("staff-order-empty")}><DashboardIcon name="orders" size={27} /><h3>No {filter === 'all' ? '' : STATUS_LABELS[filter].toLowerCase()} orders</h3><p>Orders in this status will show here.</p></div>
               ) : (
-                <div className="staff-order-list">
+                <div className={adminTw("staff-order-list")}>
                   {visibleOrders.map((order) => (
                     <OrderCard key={order.id} order={order} onToggleItem={toggleItem} onAdvance={advanceOrder} onViewDetails={setSelectedOrder} />
                   ))}
@@ -355,7 +384,7 @@ export default function StaffOrders() {
             </section>
           </div>
         ) : (
-          <div className="staff-orders-content"><section className="staff-order-empty"><h2>{section}</h2><p>This section is not available in the orders preview.</p></section></div>
+          <div className={adminTw("staff-orders-content")}><section className={adminTw("staff-order-empty")}><h2>{section}</h2><p>This section is not available in the orders preview.</p></section></div>
         )}
       </main>
       {selectedOrder && <OrderDetailsDialog order={selectedOrder} onClose={() => setSelectedOrder(null)} />}

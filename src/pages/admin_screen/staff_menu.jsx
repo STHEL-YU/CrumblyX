@@ -1,43 +1,121 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Logo } from '../../components/customer_ui.jsx'
 import { DashboardIcon, StaffProfileDialog } from './staff_admin_shared.jsx'
+import { adminTw } from './staff_admin_tw.js'
 import { useStaffProfile } from './staff_profile.js'
 import { STAFF_NAVIGATION } from './staff_navigation.js'
-import './staff_dashboard.css'
-import './staff_menu.css'
-
-const INITIAL_MENU = [
-  { id: 'butter-croissant', name: 'Butter Croissant', category: 'Pastry', price: 85, available: true },
-  { id: 'pain-au-chocolat', name: 'Pain au Chocolat', category: 'Pastry', price: 95, available: true },
-  { id: 'matcha-cookies', name: 'Matcha Cookies', category: 'Pastry', price: 50, available: true },
-  { id: 'chocolate-cookies', name: 'Chocolate Cookies', category: 'Pastry', price: 50, available: true },
-  { id: 'strawberry-milk-tea', name: 'Strawberry Milk Tea', category: 'Beverages', price: 130, available: true },
-  { id: 'brown-sugar-latte', name: 'Brown Sugar Latte', category: 'Beverages', price: 145, available: false },
-  { id: 'caramel-latte-macchiato', name: 'Caramel Latte Macchiato', category: 'Beverages', price: 180, available: true },
-  { id: 'matcha-latte', name: 'Matcha Latte', category: 'Beverages', price: 180, available: true },
-  { id: 'iced-americano', name: 'Iced Americano', category: 'Beverages', price: 120, available: true },
-]
 
 const CATEGORY_FILTERS = ['All', 'Pastry', 'Beverages']
+const MENU_CACHE_KEY = 'crumblyx.menu.v1'
+const SKELETON_ROWS = [0, 1, 2, 3, 4, 5]
 
-function MenuItemDialog({ item, onClose, onSave }) {
-  const [name, setName] = useState(item?.name || '')
-  const [category, setCategory] = useState(item?.category || 'Pastry')
-  const [price, setPrice] = useState(item ? String(item.price) : '')
-  const [available, setAvailable] = useState(item?.available ?? true)
-  const [image, setImage] = useState(item?.image || '')
-  const [error, setError] = useState('')
-  const dialogRef = useRef(null)
-  const isEditing = Boolean(item)
+/* ---------- shared class strings ---------- */
+const inputCls = 'mt-1.5 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-400 transition focus:border-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-500/15'
+const primaryBtn = 'inline-flex items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-500/30'
+const ghostBtn = 'inline-flex items-center justify-center rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold text-stone-700 transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-stone-400/20'
+const categoryTone = {
+  Pastry: 'bg-amber-50 text-amber-800 ring-amber-600/20',
+  Beverages: 'bg-sky-50 text-sky-800 ring-sky-600/20',
+}
+
+/* ---------- helpers (outside the component so they are created once) ---------- */
+async function menuRequest(action, method = 'GET', body, signal) {
+  return apiRequest(`/api/menu/${action}`, method, body, signal)
+}
+
+async function stockRequest(signal) {
+  return apiRequest('/api/stocks/list', 'GET', undefined, signal)
+}
+
+async function apiRequest(path, method = 'GET', body, signal) {
+  const response = await fetch(path, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+    signal,
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data.error || 'Menu request failed.')
+  return data
+}
+
+function normalizeMenuItem(item) {
+  return { ...item, price: Number(item.price), available: Boolean(item.available) }
+}
+
+function normalizeStockRecord(record) {
+  return { ...record, quantity: record.quantity == null ? null : Number(record.quantity) }
+}
+
+const nameKey = (value) => String(value || '').trim().toLocaleLowerCase()
+
+// A menu item is sold out when its stock record has a quantity of exactly 0.
+// Records are matched by id first, then by item name (older records used their own ids).
+function getSoldOutIds(items, records) {
+  const byId = new Map(records.map((record) => [record.id, record]))
+  const byName = new Map(records.map((record) => [nameKey(record.name), record]))
+  const soldOut = new Set()
+  for (const item of items) {
+    const record = byId.get(item.id) || byName.get(nameKey(item.name))
+    if (record && record.quantity != null && Number(record.quantity) === 0) soldOut.add(item.id)
+  }
+  return soldOut
+}
+
+function readMenuCache() {
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(MENU_CACHE_KEY) || 'null')
+    return Array.isArray(cached) ? cached : null
+  } catch {
+    return null
+  }
+}
+
+function writeMenuCache(items) {
+  try { sessionStorage.setItem(MENU_CACHE_KEY, JSON.stringify(items)) } catch { /* storage full or blocked */ }
+}
+
+// Shrinks the photo before it is saved. A raw phone photo can be 3-5 MB as base64;
+// this brings it down to roughly 30-80 KB, so the menu list loads much faster.
+function resizeImage(file, maxSize = 640) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      const scale = Math.min(1, maxSize / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(img.width * scale)
+      canvas.height = Math.round(img.height * scale)
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#fff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      URL.revokeObjectURL(url)
+      resolve(canvas.toDataURL('image/jpeg', 0.82))
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('Image could not be loaded.'))
+    }
+    img.src = url
+  })
+}
+
+// Escape to close + Tab focus trap. Keeps onClose in a ref so the effect runs once
+// (previously it re-ran, and re-focused the first input, on every parent render).
+function useDialogA11y(dialogRef, onClose) {
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
 
   useEffect(() => {
-    dialogRef.current?.querySelector('input')?.focus()
+    const dialog = dialogRef.current
+    dialog?.querySelector('input, button')?.focus()
 
     function handleKeyDown(event) {
-      if (event.key === 'Escape') onClose()
-      if (event.key !== 'Tab' || !dialogRef.current) return
-      const focusable = [...dialogRef.current.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled)')]
+      if (event.key === 'Escape') closeRef.current()
+      if (event.key !== 'Tab' || !dialog) return
+      const focusable = [...dialog.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled)')]
       const first = focusable[0]
       const last = focusable[focusable.length - 1]
       if (event.shiftKey && document.activeElement === first) {
@@ -50,9 +128,59 @@ function MenuItemDialog({ item, onClose, onSave }) {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+  }, [dialogRef])
+}
 
-  function uploadImage(event) {
+/* ---------- dialogs ---------- */
+function DialogShell({ children, onClose, labelledBy, role = 'dialog', dialogRef }) {
+  return (
+    <div
+      className={adminTw('fixed inset-0 z-50 grid place-items-center bg-stone-900/40 p-4 backdrop-blur-sm')}
+      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}
+    >
+      <section
+        ref={dialogRef}
+        className={adminTw('max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-stone-900/5')}
+        role={role}
+        aria-modal="true"
+        aria-labelledby={labelledBy}
+      >
+        {children}
+      </section>
+    </div>
+  )
+}
+
+function DialogHeader({ id, title, closeLabel, onClose }) {
+  return (
+    <header className={adminTw('mb-5 flex items-start justify-between gap-4')}>
+      <h2 id={id} className={adminTw('text-lg font-semibold text-stone-900')}>{title}</h2>
+      <button
+        type="button"
+        aria-label={closeLabel}
+        onClick={onClose}
+        className={adminTw('-mr-2 -mt-1 rounded-lg p-2 text-stone-500 transition hover:bg-stone-100 hover:text-stone-800')}
+      >
+        <DashboardIcon name="close" size={18} />
+      </button>
+    </header>
+  )
+}
+
+function MenuItemDialog({ item, onClose, onSave }) {
+  const [name, setName] = useState(item?.name || '')
+  const [category, setCategory] = useState(item?.category || 'Pastry')
+  const [price, setPrice] = useState(item ? String(item.price) : '')
+  const [available, setAvailable] = useState(item?.available ?? true)
+  const [image, setImage] = useState(item?.image || '')
+  const [error, setError] = useState('')
+  const [processing, setProcessing] = useState(false)
+  const dialogRef = useRef(null)
+  const isEditing = Boolean(item)
+
+  useDialogA11y(dialogRef, onClose)
+
+  async function uploadImage(event) {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
@@ -60,22 +188,19 @@ function MenuItemDialog({ item, onClose, onSave }) {
       setError('Choose an image file.')
       return
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Choose an image smaller than 5 MB.')
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Choose an image smaller than 10 MB.')
       return
     }
-
-    const reader = new FileReader()
-    reader.onload = () => {
-      if (typeof reader.result !== 'string') {
-        setError('This image could not be loaded. Try another file.')
-        return
-      }
-      setImage(reader.result)
+    setProcessing(true)
+    try {
+      setImage(await resizeImage(file))
       setError('')
+    } catch {
+      setError('This image could not be loaded. Try another file.')
+    } finally {
+      setProcessing(false)
     }
-    reader.onerror = () => setError('This image could not be loaded. Try another file.')
-    reader.readAsDataURL(file)
   }
 
   function submit(event) {
@@ -86,7 +211,7 @@ function MenuItemDialog({ item, onClose, onSave }) {
       setError('Enter an item name.')
       return
     }
-    if (!Number.isFinite(numericPrice) || numericPrice < 0) {
+    if (price === '' || !Number.isFinite(numericPrice) || numericPrice < 0) {
       setError('Enter a valid price.')
       return
     }
@@ -103,87 +228,163 @@ function MenuItemDialog({ item, onClose, onSave }) {
   }
 
   return (
-    <div className="staff-menu-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section ref={dialogRef} className="staff-menu-modal" role="dialog" aria-modal="true" aria-labelledby="staff-menu-modal-title">
-        <header>
-          <div><span>MENU MANAGEMENT</span><h2 id="staff-menu-modal-title">{isEditing ? 'Edit menu item' : 'Add menu item'}</h2></div>
-          <button type="button" aria-label="Close menu item form" onClick={onClose}><DashboardIcon name="close" /></button>
-        </header>
-        <form onSubmit={submit}>
-          <label>Item name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Cinnamon Roll" maxLength={100} /></label>
-          <label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}><option>Pastry</option><option>Beverages</option></select></label>
-          <label>Price (₱)<input type="number" min="0" step="0.01" value={price} onChange={(event) => setPrice(event.target.value)} placeholder="0.00" /></label>
-          <div className="staff-menu-image-field">
-            <span className="staff-menu-image-label">Item image</span>
-            <div className="staff-menu-image-control">
-              {image
-                ? <img className="staff-menu-image-preview" src={image} alt={`Preview of ${name || 'menu item'}`} />
-                : <span className="staff-menu-image-placeholder"><DashboardIcon name="boxOpen" size={22} /></span>}
-              <div>
-                <label className="staff-menu-image-upload">
-                  <span>{image ? 'Change image' : 'Upload image'}</span>
-                  <input type="file" accept="image/*" onChange={uploadImage} aria-label="Upload menu item image" />
-                </label>
-                <small>Image files up to 5 MB</small>
-              </div>
-              {image && <button className="staff-menu-image-remove" type="button" onClick={() => { setImage(''); setError('') }}>Remove</button>}
+    <DialogShell onClose={onClose} labelledBy="staff-menu-modal-title" dialogRef={dialogRef}>
+      <DialogHeader
+        id="staff-menu-modal-title"
+        title={isEditing ? 'Edit menu item' : 'Add menu item'}
+        closeLabel="Close menu item form"
+        onClose={onClose}
+      />
+      <form onSubmit={submit} className={adminTw('space-y-4')}>
+        <label className={adminTw('block text-sm font-medium text-stone-700')}>
+          Item name
+          <input className={adminTw(inputCls)} value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Cinnamon Roll" maxLength={100} />
+        </label>
+
+        <div className={adminTw('grid grid-cols-2 gap-3')}>
+          <label className={adminTw('block text-sm font-medium text-stone-700')}>
+            Category
+            <select className={adminTw(inputCls)} value={category} onChange={(event) => setCategory(event.target.value)}>
+              <option>Pastry</option>
+              <option>Beverages</option>
+            </select>
+          </label>
+          <label className={adminTw('block text-sm font-medium text-stone-700')}>
+            Price (₱)
+            <input className={adminTw(inputCls)} type="number" min="0" step="0.01" value={price} onChange={(event) => setPrice(event.target.value)} placeholder="0.00" />
+          </label>
+        </div>
+
+        <div>
+          <span className={adminTw('block text-sm font-medium text-stone-700')}>Item image</span>
+          <div className={adminTw('mt-1.5 flex items-center gap-4 rounded-xl border border-dashed border-stone-300 bg-stone-50 p-3')}>
+            {image
+              ? <img className={adminTw('h-16 w-16 rounded-lg object-cover ring-1 ring-stone-900/10')} src={image} alt={`Preview of ${name || 'menu item'}`} />
+              : <span className={adminTw('grid h-16 w-16 place-items-center rounded-lg bg-white text-stone-400 ring-1 ring-stone-200')}><DashboardIcon name="boxOpen" size={22} /></span>}
+            <div className={adminTw('min-w-0 flex-1')}>
+              <label className={adminTw('inline-flex cursor-pointer rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm font-semibold text-stone-700 transition hover:bg-stone-100 focus-within:ring-4 focus-within:ring-stone-400/20')}>
+                <span>{processing ? 'Processing…' : image ? 'Change image' : 'Upload image'}</span>
+                <input className={adminTw('sr-only')} type="file" accept="image/*" onChange={uploadImage} aria-label="Upload menu item image" disabled={processing} />
+              </label>
+              <p className={adminTw('mt-1 text-xs text-stone-500')}>Photos are resized automatically.</p>
             </div>
+            {image && <button className={adminTw('text-sm font-medium text-rose-600 hover:text-rose-700')} type="button" onClick={() => { setImage(''); setError('') }}>Remove</button>}
           </div>
-          {isEditing && <label className="staff-menu-availability-field">Available
-            <input type="checkbox" role="switch" checked={available} onChange={(event) => setAvailable(event.target.checked)} />
-          </label>}
-          {error && <p role="alert">{error}</p>}
-          <button className="staff-menu-modal-submit" type="submit">{isEditing ? 'Save changes' : 'Add item'}</button>
-        </form>
-      </section>
-    </div>
+        </div>
+
+        {isEditing && (
+          <label className={adminTw('flex items-center justify-between rounded-lg bg-stone-50 px-3 py-2.5 text-sm font-medium text-stone-700')}>
+            Available for ordering
+            <Switch checked={available} onChange={setAvailable} />
+          </label>
+        )}
+
+        {error && <p role="alert" className={adminTw('rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-rose-600/10')}>{error}</p>}
+
+        <div className={adminTw('flex justify-end gap-2 pt-2')}>
+          <button type="button" className={adminTw(ghostBtn)} onClick={onClose}>Cancel</button>
+          <button type="submit" className={adminTw(primaryBtn)} disabled={processing}>{isEditing ? 'Save changes' : 'Add item'}</button>
+        </div>
+      </form>
+    </DialogShell>
   )
 }
 
 function MenuDeleteDialog({ item, onClose, onConfirm }) {
   const dialogRef = useRef(null)
-
-  useEffect(() => {
-    const dialog = dialogRef.current
-    dialog?.querySelector('button')?.focus()
-    function handleKeyDown(event) {
-      if (event.key === 'Escape') onClose()
-      if (event.key !== 'Tab' || !dialog) return
-      const focusable = [...dialog.querySelectorAll('button:not(:disabled)')]
-      const first = focusable[0]
-      const last = focusable[focusable.length - 1]
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last?.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first?.focus()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+  useDialogA11y(dialogRef, onClose)
 
   return (
-    <div className="staff-menu-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section ref={dialogRef} className="staff-menu-modal staff-menu-delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="staff-menu-delete-title">
-        <header>
-          <div><span>MENU MANAGEMENT</span><h2 id="staff-menu-delete-title">Delete menu item?</h2></div>
-          <button type="button" aria-label="Close delete confirmation" onClick={onClose}><DashboardIcon name="close" /></button>
-        </header>
-        <p>Delete <strong>{item.name}</strong> from the menu? This action cannot be undone.</p>
-        <div className="staff-menu-delete-actions">
-          <button type="button" className="staff-menu-cancel-button" onClick={onClose}>Cancel</button>
-          <button type="button" className="staff-menu-confirm-delete" onClick={onConfirm}>Delete item</button>
-        </div>
-      </section>
-    </div>
+    <DialogShell onClose={onClose} labelledBy="staff-menu-delete-title" role="alertdialog" dialogRef={dialogRef}>
+      <DialogHeader id="staff-menu-delete-title" title="Delete menu item?" closeLabel="Close delete confirmation" onClose={onClose} />
+      <p className={adminTw('text-sm leading-6 text-stone-600')}>
+        <strong className={adminTw('text-stone-900')}>{item.name}</strong> will be removed from the menu. You can undo this for a few seconds afterwards.
+      </p>
+      <div className={adminTw('mt-6 flex justify-end gap-2')}>
+        <button type="button" className={adminTw(ghostBtn)} onClick={onClose}>Cancel</button>
+        <button type="button" className={adminTw('inline-flex items-center justify-center rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-500/30')} onClick={onConfirm}>Delete item</button>
+      </div>
+    </DialogShell>
   )
 }
 
+/* ---------- small pieces ---------- */
+function Switch({ checked, onChange, label, disabled = false }) {
+  return (
+    <span className={adminTw('relative inline-flex h-6 w-11 shrink-0')}>
+      <input
+        type="checkbox"
+        role="switch"
+        className={adminTw('peer absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0')}
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        aria-label={label}
+        disabled={disabled}
+      />
+      <span
+        aria-hidden="true"
+        className={adminTw("absolute inset-0 cursor-pointer rounded-full bg-stone-300 transition-colors peer-checked:bg-emerald-500 peer-focus-visible:ring-4 peer-focus-visible:ring-emerald-500/30 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-transform after:content-[''] peer-checked:after:translate-x-5")}
+      />
+    </span>
+  )
+}
+
+const MenuRow = memo(function MenuRow({ item, soldOut, onToggle, onEdit, onDelete }) {
+  const available = item.available && !soldOut
+  return (
+    <tr className={adminTw('transition-colors hover:bg-amber-50/40')}>
+      <th scope="row" data-label="Item" className={adminTw('px-4 py-3 text-left font-medium text-stone-900')}>
+        <span className={adminTw('flex items-center gap-3')}>
+          {item.image
+            ? <img className={adminTw('h-11 w-11 rounded-lg bg-stone-100 object-cover ring-1 ring-stone-900/10')} src={item.image} alt="" loading="lazy" decoding="async" width="44" height="44" />
+            : <span className={adminTw('grid h-11 w-11 place-items-center rounded-lg bg-stone-100 text-stone-400')} aria-hidden="true"><DashboardIcon name="boxOpen" size={17} /></span>}
+          <span>{item.name}</span>
+        </span>
+      </th>
+      <td data-label="Category" className={adminTw('px-4 py-3')}>
+        <span className={adminTw(`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${categoryTone[item.category] || 'bg-stone-100 text-stone-700 ring-stone-500/20'}`)}>{item.category}</span>
+      </td>
+      <td data-label="Price" className={adminTw('px-4 py-3 font-medium tabular-nums text-stone-800')}>₱{item.price.toFixed(2)}</td>
+      <td data-label="Available" className={adminTw('px-4 py-3')}>
+        <span className={adminTw('flex items-center gap-2')}>
+          <Switch checked={available} onChange={() => onToggle(item.id)} label={`${item.name} available`} disabled={soldOut} />
+          <span className={adminTw(`text-xs font-medium ${available ? 'text-emerald-700' : 'text-stone-500'}`)}>{available ? 'Available' : 'Sold out'}</span>
+        </span>
+      </td>
+      <td data-label="Actions" className={adminTw('px-4 py-3')}>
+        <div className={adminTw('flex justify-end gap-1')}>
+          <button type="button" aria-label={`Edit ${item.name}`} title={`Edit ${item.name}`} onClick={() => onEdit(item)} className={adminTw('rounded-lg p-2 text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-stone-400/20')}>
+            <DashboardIcon name="edit" size={16} />
+          </button>
+          <button type="button" aria-label={`Delete ${item.name}`} title={`Delete ${item.name}`} onClick={() => onDelete(item)} className={adminTw('rounded-lg p-2 text-stone-500 transition hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-400/20')}>
+            <DashboardIcon name="trash" size={16} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+})
+
+function SkeletonRows() {
+  return SKELETON_ROWS.map((row) => (
+    <tr key={row} className={adminTw('animate-pulse')} aria-hidden="true">
+      <td className={adminTw('px-4 py-3')}><span className={adminTw('flex items-center gap-3')}><span className={adminTw('h-11 w-11 rounded-lg bg-stone-200')} /><span className={adminTw('h-3.5 w-32 rounded bg-stone-200')} /></span></td>
+      <td className={adminTw('px-4 py-3')}><span className={adminTw('block h-5 w-20 rounded-full bg-stone-200')} /></td>
+      <td className={adminTw('px-4 py-3')}><span className={adminTw('block h-3.5 w-14 rounded bg-stone-200')} /></td>
+      <td className={adminTw('px-4 py-3')}><span className={adminTw('block h-6 w-24 rounded-full bg-stone-200')} /></td>
+      <td className={adminTw('px-4 py-3')}><span className={adminTw('ml-auto block h-6 w-16 rounded bg-stone-200')} /></td>
+    </tr>
+  ))
+}
+
+/* ---------- page ---------- */
 export default function StaffMenu() {
-  const [items, setItems] = useState(INITIAL_MENU)
+  // Show the last known menu instantly, then refresh it in the background.
+  const [items, setItems] = useState(() => (readMenuCache() || []).map(normalizeMenuItem))
+  const [stockRecords, setStockRecords] = useState([])
+  const [menuLoading, setMenuLoading] = useState(() => !readMenuCache())
   const [query, setQuery] = useState('')
+  const deferredQuery = useDeferredValue(query)
   const [categoryFilter, setCategoryFilter] = useState('All')
   const [sort, setSort] = useState({ key: 'name', direction: 'asc' })
   const [toast, setToast] = useState(null)
@@ -197,11 +398,61 @@ export default function StaffMenu() {
   const [section, setSection] = useState('Menu')
   const toastTimer = useRef(null)
   const deletedItemTimer = useRef(null)
+  const itemsRef = useRef(items)
+  const hasLoaded = useRef(false)
   const navigate = useNavigate()
 
-  const availableCount = items.filter((item) => item.available).length
+  itemsRef.current = items
+
+  const showToast = useCallback((next, duration = 2800) => {
+    setToast(next)
+    window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(null), duration)
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    menuRequest('list', 'GET', undefined, controller.signal)
+      .then((menuItems) => {
+        if (controller.signal.aborted) return
+        hasLoaded.current = true
+        setItems(menuItems.map(normalizeMenuItem))
+        setMenuLoading(false)
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return
+        setMenuLoading(false)
+        showToast({ message: `Could not load menu: ${error.message}` })
+      })
+
+    stockRequest(controller.signal)
+      .then((records) => {
+        if (!controller.signal.aborted) setStockRecords(records.map(normalizeStockRecord))
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) showToast({ message: `Could not load stock quantities: ${error.message}` })
+      })
+    return () => controller.abort()
+  }, [showToast])
+
+  // Keep the cache in sync after the first successful load (edits, deletes, toggles).
+  useEffect(() => {
+    if (hasLoaded.current) writeMenuCache(items)
+  }, [items])
+
+  useEffect(() => () => {
+    window.clearTimeout(toastTimer.current)
+    window.clearTimeout(deletedItemTimer.current)
+  }, [])
+
+  const soldOutIds = useMemo(() => getSoldOutIds(items, stockRecords), [items, stockRecords])
+  const availableCount = useMemo(
+    () => items.filter((item) => item.available && !soldOutIds.has(item.id)).length,
+    [items, soldOutIds],
+  )
+
   const filteredItems = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase()
+    const normalizedQuery = deferredQuery.trim().toLocaleLowerCase()
     return items
       .filter((item) => categoryFilter === 'All' || item.category === categoryFilter)
       .filter((item) => !normalizedQuery || `${item.name} ${item.category}`.toLocaleLowerCase().includes(normalizedQuery))
@@ -213,62 +464,74 @@ export default function StaffMenu() {
           : String(firstValue).localeCompare(String(secondValue))
         return sort.direction === 'asc' ? comparison : -comparison
       })
-  }, [items, query, categoryFilter, sort])
+  }, [items, deferredQuery, categoryFilter, sort])
 
-  function toggleAvailability(itemId) {
-    const currentItem = items.find((item) => item.id === itemId)
+  const toggleAvailability = useCallback(async (itemId) => {
+    const currentItem = itemsRef.current.find((item) => item.id === itemId)
     if (!currentItem) return
+    if (soldOutIds.has(itemId)) return
     const available = !currentItem.available
-    setItems((current) => current.map((item) => item.id === itemId ? { ...item, available } : item))
-    setToast({ message: `${currentItem.name} marked ${available ? 'available' : 'unavailable'}` })
-    window.clearTimeout(toastTimer.current)
-    toastTimer.current = window.setTimeout(() => setToast(null), 2800)
-  }
+    const updatedItem = { ...currentItem, available }
 
-  useEffect(() => () => {
-    window.clearTimeout(toastTimer.current)
-    window.clearTimeout(deletedItemTimer.current)
-  }, [])
+    setItems((current) => current.map((item) => (item.id === itemId ? updatedItem : item)))
+    try {
+      await menuRequest('update', 'PUT', updatedItem)
+      showToast({ message: `${currentItem.name} marked ${available ? 'available' : 'unavailable'}` })
+    } catch (error) {
+      setItems((current) => current.map((item) => (item.id === itemId ? currentItem : item)))
+      showToast({ message: error.message })
+    }
+  }, [showToast, soldOutIds])
 
-  function saveItem(item) {
+  async function saveItem(item) {
     const existing = items.some((current) => current.id === item.id)
-    setItems((current) => existing
-      ? current.map((entry) => entry.id === item.id ? item : entry)
-      : [...current, item])
-    setAddDialogOpen(false)
-    setEditingItem(null)
-    setToast({ message: `${item.name} ${existing ? 'updated' : 'added'}` })
-    window.clearTimeout(toastTimer.current)
-    toastTimer.current = window.setTimeout(() => setToast(null), 2800)
+    try {
+      const savedItem = existing
+        ? normalizeMenuItem(await menuRequest('update', 'PUT', item))
+        : normalizeMenuItem(await menuRequest('create', 'POST', item))
+      setItems((current) => (existing
+        ? current.map((entry) => (entry.id === savedItem.id ? savedItem : entry))
+        : [...current, savedItem]))
+      setAddDialogOpen(false)
+      setEditingItem(null)
+      showToast({ message: `${savedItem.name} ${existing ? 'updated' : 'added'}` })
+    } catch (error) {
+      showToast({ message: error.message })
+    }
   }
 
-  function deleteItem(item) {
-    setItems((current) => current.filter((entry) => entry.id !== item.id))
+  async function deleteItem(item) {
+    try {
+      await menuRequest(`delete?id=${encodeURIComponent(item.id)}`, 'DELETE', { id: item.id })
+      setItems((current) => current.filter((entry) => entry.id !== item.id))
+    } catch (error) {
+      setPendingDelete(null)
+      showToast({ message: error.message })
+      return
+    }
     setPendingDelete(null)
     setDeletedItem(item)
-    setToast({ message: `${item.name} deleted`, canUndo: true })
-    window.clearTimeout(toastTimer.current)
+    showToast({ message: `${item.name} deleted`, canUndo: true }, 5000)
     window.clearTimeout(deletedItemTimer.current)
-    toastTimer.current = window.setTimeout(() => {
-      setToast(null)
-      setDeletedItem(null)
-    }, 5000)
     deletedItemTimer.current = window.setTimeout(() => setDeletedItem(null), 5000)
   }
 
-  function undoDelete() {
+  async function undoDelete() {
     if (!deletedItem) return
-    setItems((current) => current.some((item) => item.id === deletedItem.id) ? current : [...current, deletedItem])
-    setToast({ message: `${deletedItem.name} restored` })
+    try {
+      const restoredItem = normalizeMenuItem(await menuRequest('create', 'POST', deletedItem))
+      setItems((current) => (current.some((item) => item.id === restoredItem.id) ? current : [...current, restoredItem]))
+      showToast({ message: `${restoredItem.name} restored` }, 2500)
+    } catch (error) {
+      showToast({ message: error.message })
+      return
+    }
     setDeletedItem(null)
-    window.clearTimeout(toastTimer.current)
     window.clearTimeout(deletedItemTimer.current)
-    toastTimer.current = window.setTimeout(() => setToast(null), 2500)
   }
 
   function confirmDelete() {
-    if (!pendingDelete) return
-    deleteItem(pendingDelete)
+    if (pendingDelete) deleteItem(pendingDelete)
   }
 
   function sortBy(key) {
@@ -284,138 +547,175 @@ export default function StaffMenu() {
 
   function navigateSection(name) {
     setDrawerOpen(false)
-    if (name === 'Dashboard') {
-      navigate('/staff/dashboard')
+    const routes = {
+      Dashboard: '/staff/dashboard',
+      Orders: '/staff/orders',
+      Stocks: '/staff/stocks',
+      Customers: '/staff/customers',
+    }
+    if (routes[name]) {
+      navigate(routes[name])
       return
     }
-    if (name === 'Orders') {
-      navigate('/staff/orders')
-      return
-    }
-    if (name === 'Stocks') {
-      navigate('/staff/stocks')
-      return
-    }
-    if (name === 'Customers') {
-      navigate('/staff/customers')
-      return
-    }
-    if (name !== 'Menu') {
-      setSection(name)
-      return
-    }
-    setSection('Menu')
+    setSection(name)
   }
 
-  function sortLabel(label, key) {
+  function sortHeader(label, key) {
+    const active = sort.key === key
     return (
-      <button className="staff-menu-sort" type="button" onClick={() => sortBy(key)} aria-label={`Sort by ${label}${sort.key === key ? `, ${sort.direction === 'asc' ? 'ascending' : 'descending'}` : ''}`}>
-        {label}<span aria-hidden="true">{sort.key === key ? (sort.direction === 'asc' ? '↑' : '↓') : '↕'}</span>
-      </button>
+      <th scope="col" aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'} className={adminTw('px-4 py-3 text-left')}>
+        <button
+          type="button"
+          onClick={() => sortBy(key)}
+          aria-label={`Sort by ${label}${active ? `, ${sort.direction === 'asc' ? 'ascending' : 'descending'}` : ''}`}
+          className={adminTw(`inline-flex items-center gap-1.5 rounded text-xs font-semibold transition hover:text-stone-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-stone-400/20 ${active ? 'text-stone-900' : 'text-stone-500'}`)}
+        >
+          {label}
+          <span aria-hidden="true" className={adminTw(active ? 'text-amber-600' : 'text-stone-300')}>{active ? (sort.direction === 'asc' ? '↑' : '↓') : '↕'}</span>
+        </button>
+      </th>
     )
   }
 
+  const isEmpty = !menuLoading && filteredItems.length === 0
+
   return (
-    <div className="admin-dashboard staff-menu-app">
-      <button className={`admin-drawer-scrim ${drawerOpen ? 'visible' : ''}`} type="button" aria-label="Close navigation menu" onClick={() => setDrawerOpen(false)} />
-      <aside className={`admin-sidebar ${drawerOpen ? 'drawer-open' : ''}`} aria-label="Staff navigation">
-        <div className="admin-brand"><Logo small /><span>CrumblyX</span><button type="button" className="admin-drawer-close" aria-label="Close menu" onClick={() => setDrawerOpen(false)}><DashboardIcon name="close" /></button></div>
-        <div className="admin-side-divider" />
-        <nav className="admin-nav" aria-label="Main navigation">
+    <div className={adminTw('admin-dashboard staff-menu-app')}>
+      <style>{`
+        .staff-menu-app { min-height: calc(100dvh - 2.5rem) !important; }
+        .menu-table th, .menu-table td { font-size: 0.875rem !important; line-height: 1.25rem !important; }
+        .menu-table thead th { font-size: 0.8125rem !important; font-weight: 600 !important; color: #78716c; }
+        .menu-table thead button { font: inherit !important; color: inherit !important; }
+        .menu-table thead th[aria-sort="ascending"], .menu-table thead th[aria-sort="descending"] { color: #1c1917; }
+      `}</style>
+      <button className={adminTw(`admin-drawer-scrim ${drawerOpen ? 'visible' : ''}`)} type="button" aria-label="Close navigation menu" onClick={() => setDrawerOpen(false)} />
+      <aside className={adminTw(`admin-sidebar ${drawerOpen ? 'drawer-open' : ''}`)} aria-label="Staff navigation">
+        <div className={adminTw('admin-brand')}><Logo small /><span>CrumblyX</span><button type="button" className={adminTw('admin-drawer-close')} aria-label="Close menu" onClick={() => setDrawerOpen(false)}><DashboardIcon name="close" /></button></div>
+        <div className={adminTw('admin-side-divider')} />
+        <nav className={adminTw('admin-nav')} aria-label="Main navigation">
           {STAFF_NAVIGATION.map((item) => (
-            <button type="button" key={item.name} className={`admin-nav-item ${section === item.name ? 'active' : ''}`} aria-current={section === item.name ? 'page' : undefined} onClick={() => navigateSection(item.name)}>
+            <button type="button" key={item.name} className={adminTw(`admin-nav-item ${section === item.name ? 'active' : ''}`)} aria-current={section === item.name ? 'page' : undefined} onClick={() => navigateSection(item.name)}>
               <DashboardIcon name={item.icon} /><span>{item.name}</span>
             </button>
           ))}
         </nav>
-        <div className="admin-account"><div className="admin-side-divider" /><div className="admin-user"><button type="button" className="admin-avatar admin-avatar-trigger" aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button><span className="admin-user-copy"><strong>John Doe</strong><small>doe@example.com</small></span><button type="button" className="admin-logout" aria-label="Log out" title="Log out" onClick={logout}><DashboardIcon name="logout" size={18} /></button></div></div>
+        <div className={adminTw('admin-account')}><div className={adminTw('admin-side-divider')} /><div className={adminTw('admin-user')}><button type="button" className={adminTw('admin-avatar admin-avatar-trigger')} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button><span className={adminTw('admin-user-copy')}><strong>John Doe</strong><small>doe@example.com</small></span><button type="button" className={adminTw('admin-logout')} aria-label="Log out" title="Log out" onClick={logout}><DashboardIcon name="logout" size={18} /></button></div></div>
       </aside>
 
-      <main className="admin-main staff-menu-main">
-        <header className="admin-topbar">
-          <div className="admin-title-group">
-            <button type="button" className="admin-hamburger" aria-label="Open navigation menu" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}><span /><span /><span /></button>
+      <main className={adminTw('admin-main staff-menu-main')}>
+        <header className={adminTw('admin-topbar')}>
+          <div className={adminTw('admin-title-group')}>
+            <button type="button" className={adminTw('admin-hamburger')} aria-label="Open navigation menu" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}><span /><span /><span /></button>
             <DashboardIcon name="plate" size={24} /><h1>{section}</h1>
           </div>
-          <div className="admin-top-actions">
-            <div className="admin-chat-wrap">
-              <button type="button" className="admin-chat-button" aria-label="Customer Chat, 2 unread messages" aria-expanded={chatOpen} onClick={() => setChatOpen((open) => !open)}><DashboardIcon name="chat" size={18} /><span>Customer Chat</span><b aria-hidden="true">2</b></button>
-              {chatOpen && <div className="admin-chat-popover" role="dialog" aria-label="Customer chat preview"><header><strong>Customer Chat</strong><button type="button" aria-label="Close chats" onClick={() => setChatOpen(false)}><DashboardIcon name="close" size={17} /></button></header><p className="staff-menu-chat-note">2 unread customer messages</p></div>}
+          <div className={adminTw('admin-top-actions')}>
+            <div className={adminTw('admin-chat-wrap')}>
+              <button type="button" className={adminTw('admin-chat-button')} aria-label="Customer Chat, 2 unread messages" aria-expanded={chatOpen} onClick={() => setChatOpen((open) => !open)}><DashboardIcon name="chat" size={18} /><span>Customer Chat</span><b aria-hidden="true">2</b></button>
+              {chatOpen && <div className={adminTw('admin-chat-popover')} role="dialog" aria-label="Customer chat preview"><header><strong>Customer Chat</strong><button type="button" aria-label="Close chats" onClick={() => setChatOpen(false)}><DashboardIcon name="close" size={17} /></button></header><p className={adminTw('px-3 py-2 text-sm text-stone-600')}>2 unread customer messages</p></div>}
             </div>
-            <button type="button" className="admin-avatar top-avatar admin-avatar-trigger" aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
+            <button type="button" className={adminTw('admin-avatar top-avatar admin-avatar-trigger')} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
           </div>
         </header>
 
-        {section === 'Menu' ? <div className="staff-menu-content">
-          <section className="staff-menu-banner">
-            <h2>{section === 'Menu' ? 'Menu Management' : `${section} Management`}</h2>
-            <label className="staff-menu-search">
-              <DashboardIcon name="search" size={19} />
-              <span className="visually-hidden">Search menu items by name or category</span>
-              <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Item..." />
-              {query && <button type="button" aria-label="Clear search" onClick={() => setQuery('')}><DashboardIcon name="close" size={15} /></button>}
-            </label>
-          </section>
-
-          <section className="staff-menu-list-section" aria-labelledby="staff-menu-table-title">
-            <div className="staff-menu-toolbar">
-              <div className="staff-menu-filters" aria-label="Filter by category">
-                {CATEGORY_FILTERS.map((category) => <button type="button" key={category} className={categoryFilter === category ? 'selected' : ''} aria-pressed={categoryFilter === category} onClick={() => setCategoryFilter(category)}>{category}</button>)}
+        {section === 'Menu' ? (
+          <div className={adminTw('mx-auto w-full max-w-6xl space-y-5 p-4 md:p-6')}>
+            {/* Title, search and primary action */}
+            <section className={adminTw('flex flex-col gap-4 md:flex-row md:items-end md:justify-between')}>
+              <div>
+                <h2 className={adminTw('text-2xl font-semibold tracking-tight text-stone-900')}>Menu management</h2>
+                <p className={adminTw('mt-1 text-sm text-stone-500')} aria-live="polite">
+                  {menuLoading ? 'Loading your menu…' : `${availableCount} of ${items.length} items available`}
+                </p>
               </div>
-              <div className="staff-menu-toolbar-actions">
-                <div className="staff-menu-summary" aria-live="polite">{availableCount} of {items.length} Available</div>
-                <button type="button" className="staff-menu-add-button" onClick={() => setAddDialogOpen(true)}><DashboardIcon name="plus" size={15} />Add Item</button>
+              <div className={adminTw('flex flex-col gap-3 sm:flex-row sm:items-center')}>
+                <label className={adminTw('relative block sm:w-72')}>
+                  <span className={adminTw('pointer-events-none absolute inset-y-0 left-3 grid place-items-center text-stone-400')}><DashboardIcon name="search" size={18} /></span>
+                  <span className={adminTw('sr-only')}>Search menu items by name or category</span>
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search items"
+                    className={adminTw('w-full rounded-lg border border-stone-300 bg-white py-2.5 pl-10 pr-9 text-sm text-stone-900 placeholder:text-stone-400 transition focus:border-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-500/15 [&::-webkit-search-cancel-button]:appearance-none')}
+                  />
+                  {query && (
+                    <button type="button" aria-label="Clear search" onClick={() => setQuery('')} className={adminTw('absolute inset-y-0 right-2 my-auto h-7 w-7 rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-stone-700')}>
+                      <DashboardIcon name="close" size={15} />
+                    </button>
+                  )}
+                </label>
+                <button type="button" className={adminTw(primaryBtn)} onClick={() => setAddDialogOpen(true)}>
+                  <DashboardIcon name="plus" size={15} />Add item
+                </button>
               </div>
-            </div>
+            </section>
 
-            <div className="staff-menu-table-wrap">
-              <table className="staff-menu-table">
-                <caption id="staff-menu-table-title" className="visually-hidden">CrumblyX menu item availability and prices</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">{sortLabel('ITEM', 'name')}</th>
-                    <th scope="col">{sortLabel('CATEGORY', 'category')}</th>
-                    <th scope="col">{sortLabel('PRICE', 'price')}</th>
-                    <th scope="col">AVAILABLE</th>
-                    <th scope="col"><span className="staff-menu-actions-heading">ACTIONS</span></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredItems.map((item) => (
-                    <tr key={item.id}>
-                      <th scope="row" data-label="Item">
-                        <span className="staff-menu-item-cell">
-                          {item.image
-                            ? <img className="staff-menu-item-image" src={item.image} alt="" />
-                            : <span className="staff-menu-item-image staff-menu-item-image-empty" aria-hidden="true"><DashboardIcon name="boxOpen" size={17} /></span>}
-                          <span>{item.name}</span>
-                        </span>
-                      </th>
-                      <td data-label="Category"><span className={`staff-menu-category category-${item.category.toLowerCase()}`}>{item.category}</span></td>
-                      <td data-label="Price" className="staff-menu-price">₱{item.price.toFixed(2)}</td>
-                      <td data-label="Available">
-                        <label className="staff-menu-toggle">
-                          <span className="visually-hidden">{item.name} available</span>
-                          <input type="checkbox" role="switch" checked={item.available} onChange={() => toggleAvailability(item.id)} aria-label={`${item.name} available`} />
-                          <span className="staff-menu-toggle-track" aria-hidden="true"><i /></span>
-                        </label>
-                      </td>
-                      <td data-label="Actions">
-                        <div className="staff-menu-row-actions">
-                          <button type="button" aria-label={`Edit ${item.name}`} title={`Edit ${item.name}`} onClick={() => setEditingItem(item)}><DashboardIcon name="edit" size={15} /></button>
-                          <button type="button" aria-label={`Delete ${item.name}`} title={`Delete ${item.name}`} onClick={() => setPendingDelete(item)}><DashboardIcon name="trash" size={15} /></button>
-                        </div>
-                      </td>
-                    </tr>
+            {/* Table card */}
+            <section className={adminTw('overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm')} aria-labelledby="staff-menu-table-title">
+              <div className={adminTw('flex items-center justify-between gap-3 border-b border-stone-200 px-4 py-3')}>
+                <div role="group" aria-label="Filter by category" className={adminTw('inline-flex rounded-lg bg-stone-100 p-1')}>
+                  {CATEGORY_FILTERS.map((category) => (
+                    <button
+                      type="button"
+                      key={category}
+                      aria-pressed={categoryFilter === category}
+                      onClick={() => setCategoryFilter(category)}
+                      className={adminTw(`rounded-md px-3.5 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-500/25 ${categoryFilter === category ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600 hover:text-stone-900'}`)}
+                    >
+                      {category}
+                    </button>
                   ))}
-                  {filteredItems.length === 0 && <tr className="staff-menu-empty-row"><td colSpan="5"><span><DashboardIcon name="search" size={23} /></span><strong>No items found</strong><small>Try another item name or category.</small></td></tr>}
-                </tbody>
-              </table>
-            </div>
+                </div>
+                <span className={adminTw('hidden text-sm text-stone-500 sm:block')}>{filteredItems.length} shown</span>
+              </div>
+
+              <div className={adminTw('overflow-x-auto')}>
+                <table className={adminTw('menu-table w-full min-w-[640px] border-collapse text-sm')}>
+                  <caption id="staff-menu-table-title" className={adminTw('sr-only')}>CrumblyX menu item availability and prices</caption>
+                  <thead className={adminTw('bg-stone-50')}>
+                    <tr className={adminTw('border-b border-stone-200')}>
+                      {sortHeader('Item', 'name')}
+                      {sortHeader('Category', 'category')}
+                      {sortHeader('Price', 'price')}
+                      <th scope="col" className={adminTw('px-4 py-3 text-left text-xs font-semibold text-stone-500')}>Status</th>
+                      <th scope="col" className={adminTw('px-4 py-3 text-right text-xs font-semibold text-stone-500')}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className={adminTw('divide-y divide-stone-100')}>
+                    {menuLoading && <SkeletonRows />}
+                    {!menuLoading && filteredItems.map((item) => (
+                      <MenuRow key={item.id} item={item} soldOut={soldOutIds.has(item.id)} onToggle={toggleAvailability} onEdit={setEditingItem} onDelete={setPendingDelete} />
+                    ))}
+                    {isEmpty && (
+                      <tr>
+                        <td colSpan="5" className={adminTw('px-4 py-14 text-center')}>
+                          <span className={adminTw('mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-stone-100 text-stone-400')}><DashboardIcon name="search" size={21} /></span>
+                          <strong className={adminTw('block text-stone-900')}>{query ? 'No matching items' : 'No items yet'}</strong>
+                          <small className={adminTw('mt-1 block text-stone-500')}>{query ? 'Try a different name or category.' : 'Add your first menu item to get started.'}</small>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        ) : (
+          <section className={adminTw('mx-auto mt-16 max-w-sm px-4 text-center')}>
+            <span className={adminTw('mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-stone-100 text-stone-500')}><DashboardIcon name={STAFF_NAVIGATION.find((item) => item.name === section)?.icon} size={25} /></span>
+            <h2 className={adminTw('text-lg font-semibold text-stone-900')}>{section}</h2>
+            <p className={adminTw('mt-1 text-sm text-stone-500')}>This section isn’t available yet.</p>
           </section>
-        </div> : <section className="staff-menu-placeholder"><span><DashboardIcon name={STAFF_NAVIGATION.find((item) => item.name === section)?.icon} size={25} /></span><h2>{section}</h2><p>This management section is not available yet.</p></section>}
+        )}
       </main>
-      {toast && <div className="staff-menu-toast" role="status"><DashboardIcon name={toast.canUndo ? 'trash' : 'check'} size={16} /><span>{toast.message}</span>{toast.canUndo && deletedItem && <button type="button" onClick={undoDelete}>Undo</button>}</div>}
+
+      {toast && (
+        <div className={adminTw('fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-3 rounded-xl bg-stone-900 px-4 py-3 text-sm text-white shadow-xl')} role="status">
+          <DashboardIcon name={toast.canUndo ? 'trash' : 'check'} size={16} />
+          <span>{toast.message}</span>
+          {toast.canUndo && deletedItem && <button type="button" className={adminTw('font-semibold text-amber-300 hover:text-amber-200')} onClick={undoDelete}>Undo</button>}
+        </div>
+      )}
       {addDialogOpen && <MenuItemDialog onClose={() => setAddDialogOpen(false)} onSave={saveItem} />}
       {editingItem && <MenuItemDialog item={editingItem} onClose={() => setEditingItem(null)} onSave={saveItem} />}
       {pendingDelete && <MenuDeleteDialog item={pendingDelete} onClose={() => setPendingDelete(null)} onConfirm={confirmDelete} />}

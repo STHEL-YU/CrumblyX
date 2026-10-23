@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Icon, Logo } from '../../components/customer_ui.jsx'
 import CustomerMessage from './customer_message.jsx'
@@ -6,27 +6,41 @@ import CustomerNotifications from './customer_notifications.jsx'
 import CosProfile from './cos_profile.jsx'
 import CosOrderTracking from './cos_order_tracking.jsx'
 
-const products = [
-  {
-    id: 'matcha-cookie',
-    name: 'Matcha Cookies',
-    price: 50,
-    category: 'Pastries',
-    description: 'Buttery, soft-baked cookies with a delicate matcha finish.',
-    image:
-      'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?auto=format&fit=crop&w=1000&q=85',
-  },
-  {
-    id: 'caramel-latte',
-    name: 'Caramel Latte Macchiato',
-    price: 150,
-    category: 'Beverages',
-    description: 'Espresso layered with velvety milk and house-made caramel.',
-    image:
-      'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?auto=format&fit=crop&w=1000&q=85',
-    customizable: true,
-  },
-]
+const fallbackImages = {
+  Pastry: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?auto=format&fit=crop&w=1000&q=85',
+  Beverages: 'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?auto=format&fit=crop&w=1000&q=85',
+}
+
+async function fetchJson(path, signal) {
+  const response = await fetch(path, { signal })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data.error || 'Could not load menu.')
+  return data
+}
+
+function nameKey(value) {
+  return String(value || '').trim().toLocaleLowerCase()
+}
+
+function getAvailableProducts(menuItems, stockRecords) {
+  const stocksById = new Map(stockRecords.map((record) => [record.id, record]))
+  const stocksByName = new Map(stockRecords.map((record) => [nameKey(record.name), record]))
+
+  return menuItems
+    .filter((item) => item.available)
+    .filter((item) => {
+      const stock = stocksById.get(item.id) || stocksByName.get(nameKey(item.name))
+      return stock?.quantity == null || Number(stock.quantity) > 0
+    })
+    .map((item) => ({
+      ...item,
+      price: Number(item.price),
+      category: item.category === 'Pastry' ? 'Pastries' : item.category,
+      description: item.description || '',
+      image: item.image || fallbackImages[item.category] || fallbackImages.Pastry,
+      customizable: item.category === 'Beverages',
+    }))
+}
 
 const addons = [
   { id: 'caramel', name: 'Extra Caramel Shot', price: 30 },
@@ -37,10 +51,15 @@ const addons = [
 export default function CosHome() {
   const navigate = useNavigate()
   const [category, setCategory] = useState('All Items')
+  const [products, setProducts] = useState([])
+  const [menuLoading, setMenuLoading] = useState(true)
+  const [menuError, setMenuError] = useState('')
   const [selected, setSelected] = useState(null)
   const [cart, setCart] = useState([])
   const [selectedCartItemIds, setSelectedCartItemIds] = useState(() => new Set())
   const [cartOpen, setCartOpen] = useState(false)
+  const [orderSubmitting, setOrderSubmitting] = useState(false)
+  const [orderError, setOrderError] = useState('')
   const [trackedOrders, setTrackedOrders] = useState([])
   const [trackingOrder, setTrackingOrder] = useState(null)
   const [messageOpen, setMessageOpen] = useState(false)
@@ -58,9 +77,30 @@ export default function CosHome() {
   const [orderMode] = useState(() => new URLSearchParams(window.location.search).get('mode') || 'takeout')
   const [tableNumber] = useState(() => new URLSearchParams(window.location.search).get('table'))
 
+  useEffect(() => {
+    const controller = new AbortController()
+    Promise.all([
+      fetchJson('/api/menu/list', controller.signal),
+      fetchJson('/api/stocks/list', controller.signal),
+    ])
+      .then(([menuItems, stockRecords]) => {
+        if (!Array.isArray(menuItems) || !Array.isArray(stockRecords)) {
+          throw new Error('The menu response was invalid.')
+        }
+        setProducts(getAvailableProducts(menuItems, stockRecords))
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) setMenuError(error.message)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setMenuLoading(false)
+      })
+    return () => controller.abort()
+  }, [])
+
   const visibleProducts = useMemo(
     () => category === 'All Items' ? products : products.filter((product) => product.category === category),
-    [category],
+    [category, products],
   )
   const categoryOptions = ['All Items', 'Pastries', 'Beverages']
   const addonTotal = selectedAddons.reduce(
@@ -115,6 +155,9 @@ export default function CosHome() {
         price: unitTotal,
         image: selected.image,
         customization,
+        customizationData: selected.customizable
+          ? { coffeeType, cupSize, sugar, addonIds: selectedAddons }
+          : null,
       }
       setCart((items) => [...items, newItem])
       setSelectedCartItemIds((ids) => new Set([...ids, newItem.id]))
@@ -122,23 +165,44 @@ export default function CosHome() {
     setSelected(null)
   }
 
-  function placeOrder() {
+  async function placeOrder() {
     const itemsToOrder = cart.filter((item) => selectedCartItemIds.has(item.id))
-    if (itemsToOrder.length === 0) return
+    if (itemsToOrder.length === 0 || orderSubmitting) return
 
-    const newOrder = {
-      id: Date.now().toString().slice(-8),
-      mode: orderMode,
-      tableNumber,
-      items: itemsToOrder,
-      total: itemsToOrder.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    setOrderSubmitting(true)
+    setOrderError('')
+    try {
+      const response = await fetch('/api/orders/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: orderMode === 'dine-in' ? 'dine-in' : 'takeout',
+          tableNumber,
+          customerName: customer.name,
+          customerEmail: customer.email,
+          items: itemsToOrder.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            customization: item.customization,
+            customizationData: item.customizationData,
+          })),
+        }),
+      })
+      const newOrder = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(newOrder.error || 'Could not place your order.')
+
+      setTrackedOrders((orders) => [...orders, newOrder])
+      setTrackingOrder(newOrder)
+      const orderedIds = new Set(itemsToOrder.map((item) => item.id))
+      const remainingItems = cart.filter((item) => !orderedIds.has(item.id))
+      setCart(remainingItems)
+      setSelectedCartItemIds(new Set(remainingItems.map((item) => item.id)))
+      setCartOpen(false)
+    } catch (error) {
+      setOrderError(error.message)
+    } finally {
+      setOrderSubmitting(false)
     }
-    setTrackedOrders((orders) => [...orders, newOrder])
-    setTrackingOrder(newOrder)
-    const remainingItems = cart.filter((item) => !selectedCartItemIds.has(item.id))
-    setCart(remainingItems)
-    setSelectedCartItemIds(new Set(remainingItems.map((item) => item.id)))
-    setCartOpen(false)
   }
 
   function toggleCartItemSelection(itemId) {
@@ -235,6 +299,11 @@ export default function CosHome() {
             </nav>
 
             <div className="product-list">
+              {menuLoading && <p role="status">Loading menu…</p>}
+              {!menuLoading && menuError && <p role="alert">Could not load menu: {menuError}</p>}
+              {!menuLoading && !menuError && visibleProducts.length === 0 && (
+                <p>{products.length === 0 ? 'No menu items are currently available.' : 'No items in this category are currently available.'}</p>
+              )}
               {visibleProducts.map((product) => (
                 <article className="product-card" key={product.id}>
                   <button className="product-photo-wrap" onClick={() => startItem(product)} aria-label={`View ${product.name}`}>
@@ -309,6 +378,7 @@ export default function CosHome() {
               </div>
             ) : (
               <div className="filled-cart">
+                {orderError && <p className="cart-order-error" role="alert">{orderError}</p>}
                 <div className="cart-items">
                   {cart.map((item) => (
                     <article className="cart-item" key={item.id}>
@@ -331,8 +401,8 @@ export default function CosHome() {
                   <span>Selected total</span>
                   <strong>₱ {cart.filter((item) => selectedCartItemIds.has(item.id)).reduce((sum, item) => sum + item.price * item.quantity, 0)}</strong>
                 </div>
-                <button className="order-now-button" onClick={placeOrder} disabled={!cart.some((item) => selectedCartItemIds.has(item.id))}>
-                  Order Selected ({cart.filter((item) => selectedCartItemIds.has(item.id)).length})
+                <button className="order-now-button" onClick={placeOrder} disabled={orderSubmitting || !cart.some((item) => selectedCartItemIds.has(item.id))}>
+                  {orderSubmitting ? 'Placing order…' : `Order Selected (${cart.filter((item) => selectedCartItemIds.has(item.id)).length})`}
                 </button>
                 <button className="browse-button" onClick={() => setCartOpen(false)}>Browse Menu</button>
               </div>
