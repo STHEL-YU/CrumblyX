@@ -1,15 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../../components/customer_ui.jsx'
 
-export default function CustomerMessage({ isOpen, onClose }) {
+export default function CustomerMessage({ isOpen, onClose, customerId }) {
   const [draft, setDraft] = useState('')
-  const [messages, setMessages] = useState([
-    {
-      id: 'welcome',
-      text: 'Hi! Welcome to CrumblyX. What can we help you with?',
-      sender: 'admin',
-    },
-  ])
+  const [messages, setMessages] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
@@ -24,24 +21,64 @@ export default function CustomerMessage({ isOpen, onClose }) {
   }, [isOpen, onClose])
 
   useEffect(() => {
+    if (!isOpen || !customerId) return undefined
+    const controller = new AbortController()
+
+    async function loadMessages() {
+      try {
+        const response = await fetch(`/api/message/list?customerId=${encodeURIComponent(customerId)}`, {
+          signal: controller.signal,
+        })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(data.error || 'Could not load messages.')
+        if (!controller.signal.aborted) {
+          setMessages(Array.isArray(data.messages) ? data.messages : [])
+          setError('')
+          setLoading(false)
+        }
+      } catch (requestError) {
+        if (!controller.signal.aborted) {
+          setError(requestError.message)
+          setLoading(false)
+        }
+      }
+    }
+
+    setLoading(true)
+    loadMessages()
+    const timer = window.setInterval(loadMessages, 5000)
+    return () => {
+      controller.abort()
+      window.clearInterval(timer)
+    }
+  }, [customerId, isOpen])
+
+  useEffect(() => {
     if (isOpen) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [isOpen, messages])
 
-  function sendMessage(event) {
+  async function sendMessage(event) {
     event.preventDefault()
     const text = draft.trim()
-    if (!text) return
+    if (!text || sending) return
 
-    setMessages((currentMessages) => [
-      ...currentMessages,
-      {
-        id: `${Date.now()}`,
-        text,
-        sender: 'customer',
-        time: new Date(),
-      },
-    ])
-    setDraft('')
+    setSending(true)
+    setError('')
+    try {
+      const response = await fetch('/api/message/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId, message: text }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Could not send message.')
+      setMessages((current) => [...current, data.message])
+      setDraft('')
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setSending(false)
+    }
   }
 
   if (!isOpen) return null
@@ -67,13 +104,18 @@ export default function CustomerMessage({ isOpen, onClose }) {
         </header>
 
         <div className="message-list" aria-live="polite">
-          <p className="message-demo-note">Messages stay in this session and aren&apos;t delivered to staff yet.</p>
+          {!customerId && <p className="message-demo-note">Sign in to send a message to support.</p>}
+          {loading && <p className="message-demo-note">Loading messages…</p>}
+          {error && <p className="message-demo-note" role="alert">{error}</p>}
+          {!loading && !error && messages.length === 0 && customerId && (
+            <p className="message-demo-note">No messages yet. Send a message to start a conversation with support.</p>
+          )}
           {messages.map((message) => (
             <article className={`message-bubble ${message.sender === 'customer' ? 'customer-message' : 'support-message'}`} key={message.id}>
               <p>{message.text}</p>
-              {message.time && (
-                <time dateTime={message.time.toISOString()}>
-                  {message.time.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+              {message.createdAt && (
+                <time dateTime={message.createdAt}>
+                  {new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                 </time>
               )}
             </article>
@@ -90,8 +132,10 @@ export default function CustomerMessage({ isOpen, onClose }) {
             onChange={(event) => setDraft(event.target.value)}
             placeholder="Write your message..."
             autoComplete="off"
+            maxLength={2000}
+            disabled={!customerId || sending}
           />
-          <button type="submit" aria-label="Send message" disabled={!draft.trim()}>
+          <button type="submit" aria-label="Send message" disabled={!customerId || !draft.trim() || sending}>
             <Icon name="arrow" size={19} />
           </button>
         </form>

@@ -188,6 +188,7 @@ button { -webkit-tap-highlight-color: transparent; }
   color: var(--espresso);
 }
 .auth-subtitle { margin: 5px 0 18px; color: #8b7256; font-size: 12px; font-weight: 700; }
+.auth-error { margin: 0 0 12px; color: #a52822; font-size: 12px; font-weight: 700; }
 .auth-field { display: block; margin: 0 0 12px; color: var(--espresso); font-size: 11px; font-weight: 900; }
 .auth-field > span:first-child { display: block; margin-bottom: 5px; }
 .auth-field input {
@@ -765,6 +766,15 @@ button { -webkit-tap-highlight-color: transparent; }
 .profile-order-heading > strong { color: #9a8568; font-size: 9px; }
 .profile-order-status { display: inline-flex; align-items: center; gap: 5px; color: var(--deep-green); font-size: 9px; font-weight: 900; }
 .profile-order-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--deep-green); }
+.profile-order-status--new { color: #946200; }
+.profile-order-status--new i { background: #d99a00; }
+.profile-order-status--preparing { color: #0369a1; }
+.profile-order-status--preparing i { background: #0284c7; }
+.profile-order-status--ready { color: #047857; }
+.profile-order-status--ready i { background: #059669; }
+.profile-order-status--completed { color: #57534e; }
+.profile-order-status--completed i { background: #78716c; }
+.profile-orders-error, .profile-orders-empty { margin: 0 0 10px; color: #806a4c; font-size: 11px; }
 .profile-order h4 { margin: 8px 0 4px; color: var(--espresso); font: 700 13px var(--slab); }
 .profile-order p { margin: 0; color: #806a4c; font-size: 10px; }
 .profile-order-items { display: grid; gap: 6px; padding: 9px 0 0; margin: 9px 0 0; border-top: 1px solid #dce9c8; list-style: none; }

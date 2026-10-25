@@ -61,13 +61,16 @@ export default function CosHome() {
   const [orderSubmitting, setOrderSubmitting] = useState(false)
   const [orderError, setOrderError] = useState('')
   const [trackedOrders, setTrackedOrders] = useState([])
+  const [trackedOrdersLoaded, setTrackedOrdersLoaded] = useState(false)
   const [trackingOrder, setTrackingOrder] = useState(null)
   const [messageOpen, setMessageOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [customer] = useState(() => ({
+    id: sessionStorage.getItem('crumblyx-customer-id') || '',
     name: sessionStorage.getItem('crumblyx-customer-name') || '',
     email: sessionStorage.getItem('crumblyx-customer-email') || '',
   }))
+  const [trackedOrdersError, setTrackedOrdersError] = useState('')
   const [quantity, setQuantity] = useState(1)
   const [coffeeType, setCoffeeType] = useState('ICED')
   const [cupSize, setCupSize] = useState('MEDIUM')
@@ -97,6 +100,37 @@ export default function CosHome() {
       })
     return () => controller.abort()
   }, [])
+
+  useEffect(() => {
+    if (!customer.id) return
+    const controller = new AbortController()
+
+    async function refreshTrackedOrders() {
+      try {
+        const response = await fetch(
+          `/api/orders/list?customerId=${encodeURIComponent(customer.id)}`,
+          { signal: controller.signal },
+        )
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(data.error || 'Could not refresh your orders.')
+        if (!Array.isArray(data.orders)) throw new Error('The orders response was invalid.')
+        if (!controller.signal.aborted) {
+          setTrackedOrders(data.orders)
+          setTrackedOrdersLoaded(true)
+          setTrackedOrdersError('')
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) setTrackedOrdersError(error.message)
+      }
+    }
+
+    refreshTrackedOrders()
+    const timer = window.setInterval(refreshTrackedOrders, 10000)
+    return () => {
+      controller.abort()
+      window.clearInterval(timer)
+    }
+  }, [customer.id])
 
   const visibleProducts = useMemo(
     () => category === 'All Items' ? products : products.filter((product) => product.category === category),
@@ -235,6 +269,7 @@ export default function CosHome() {
   }
 
   function logout() {
+    sessionStorage.removeItem('crumblyx-customer-id')
     sessionStorage.removeItem('crumblyx-customer-name')
     sessionStorage.removeItem('crumblyx-customer-email')
     navigate('/login', { replace: true })
@@ -250,7 +285,11 @@ export default function CosHome() {
           </button>
           <div className="header-actions">
             <button className="header-icon" aria-label="Message CrumblyX staff" onClick={() => setMessageOpen(true)}><Icon name="chat" /></button>
-            <CustomerNotifications />
+            <CustomerNotifications
+              customerId={customer.id}
+              orders={trackedOrders}
+              ordersLoaded={trackedOrdersLoaded}
+            />
             <button className="header-icon cart-trigger" aria-label={`Open cart, ${cartCount} items`} onClick={() => setCartOpen(true)}>
               <Icon name="cart" />
               {cartCount > 0 && <span className="cart-count">{cartCount}</span>}
@@ -411,11 +450,12 @@ export default function CosHome() {
           </aside>
         </div>
       )}
-      <CustomerMessage isOpen={messageOpen} onClose={() => setMessageOpen(false)} />
+            <CustomerMessage isOpen={messageOpen} onClose={() => setMessageOpen(false)} customerId={customer.id} />
       {profileOpen && (
         <CosProfile
           customer={customer}
           orders={trackedOrders}
+          ordersError={trackedOrdersError}
           onClose={() => setProfileOpen(false)}
           onTrackOrder={(order) => {
             setProfileOpen(false)

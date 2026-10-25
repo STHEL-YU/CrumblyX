@@ -1,7 +1,14 @@
 import { useEffect } from 'react'
 import { Icon } from '../../components/customer_ui.jsx'
 
-export default function CosProfile({ customer, orders, onClose, onLogout, onTrackOrder }) {
+const ORDER_STATUS_LABELS = {
+  new: 'Order placed',
+  preparing: 'Preparing',
+  ready: 'Ready',
+  completed: 'Completed',
+}
+
+export default function CosProfile({ customer, orders, ordersError, onClose, onLogout, onTrackOrder }) {
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -36,13 +43,16 @@ export default function CosProfile({ customer, orders, onClose, onLogout, onTrac
             <div><dt>Email</dt><dd>{customer.email || 'Not provided'}</dd></div>
           </dl>
         </div>
-        {orders.length > 0 && (
-          <section className="profile-orders" aria-label="Orders in progress">
-            <h3 className="profile-orders-title">Orders in progress</h3>
+        <section className="profile-orders" aria-label="Your orders">
+          <h3 className="profile-orders-title">My orders</h3>
+          {ordersError && <p className="profile-orders-error" role="status">{ordersError}</p>}
+          {orders.length === 0 && !ordersError && <p className="profile-orders-empty">No orders yet.</p>}
             {orders.map((order) => (
               <article className="profile-order" key={order.id} aria-labelledby={`profile-order-${order.id}`}>
                 <div className="profile-order-heading">
-                  <span className="profile-order-status"><i /> In progress</span>
+                  <span className={`profile-order-status profile-order-status--${order.status}`}>
+                    <i /> {ORDER_STATUS_LABELS[order.status] || 'Order placed'}
+                  </span>
                   <strong>#{order.id}</strong>
                 </div>
                 <h4 id={`profile-order-${order.id}`}>Order</h4>
@@ -54,15 +64,14 @@ export default function CosProfile({ customer, orders, onClose, onLogout, onTrac
                   {order.items.map((item) => (
                     <li key={item.id}>
                       <span>{item.quantity} × {item.name}</span>
-                      <strong>In progress</strong>
+                      <strong>{item.checked ? 'Prepared' : order.status === 'new' ? 'Queued' : 'Preparing'}</strong>
                     </li>
                   ))}
                 </ul>
                 <button type="button" onClick={() => onTrackOrder(order)}>Track order</button>
               </article>
             ))}
-          </section>
-        )}
+        </section>
         <button className="profile-logout" type="button" onClick={onLogout}>
           <Icon name="arrow" size={17} />
           Log out

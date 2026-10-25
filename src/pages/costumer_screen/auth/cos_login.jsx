@@ -4,12 +4,30 @@ import { Icon, Logo } from '../../../components/customer_ui.jsx'
 export default function CustomerLogin({ onSubmit, onSwitch }) {
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(true)
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     const email = String(formData.get('email') || '').trim()
-    onSubmit({ name: email.split('@')[0] || 'Customer', email })
+    const password = String(formData.get('password') || '')
+    setError('')
+    setSubmitting(true)
+    try {
+      const response = await fetch('/api/customers/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Could not sign in.')
+      onSubmit(data.customer)
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -45,7 +63,8 @@ export default function CustomerLogin({ onSubmit, onSwitch }) {
               </button>
             </span>
           </label>
-          <button className="auth-submit" type="submit">Sign In</button>
+          {error && <p className="auth-error" role="alert">{error}</p>}
+          <button className="auth-submit" type="submit" disabled={submitting}>{submitting ? 'Signing in…' : 'Sign In'}</button>
         </form>
         <div className="auth-options">
           <label className="remember-option">

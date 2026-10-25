@@ -22,6 +22,7 @@ export default function AppLayout() {
   const currentPath = location.pathname.replace(/\/+$/, '') || '/'
 
   function completeAuthentication(customer) {
+    sessionStorage.setItem('crumblyx-customer-id', customer.id)
     sessionStorage.setItem('crumblyx-customer-name', customer.name)
     sessionStorage.setItem('crumblyx-customer-email', customer.email)
     navigate('/order-type')
@@ -77,30 +78,44 @@ export default function AppLayout() {
         <Route
           path="/order-type"
           element={
-            <CustomerAuthScene>
-              <CosOrderType
-                onDineIn={() => navigate('/scan-table')}
-                onTakeout={() => navigate('/home?mode=takeout')}
-              />
-            </CustomerAuthScene>
+            <CustomerOnly>
+              <CustomerAuthScene>
+                <CosOrderType
+                  onDineIn={() => navigate('/scan-table')}
+                  onTakeout={() => navigate('/home?mode=takeout')}
+                />
+              </CustomerAuthScene>
+            </CustomerOnly>
           }
         />
         <Route
           path="/scan-table"
           element={
-            <CustomerAuthScene>
-              <CosTableScanner
-                onTableFound={(tableNumber) => navigate(`/home?mode=dine-in&table=${encodeURIComponent(tableNumber)}`)}
-                onBack={() => navigate('/order-type')}
-              />
-            </CustomerAuthScene>
+            <CustomerOnly>
+              <CustomerAuthScene>
+                <CosTableScanner
+                  onTableFound={(tableNumber) => navigate(`/home?mode=dine-in&table=${encodeURIComponent(tableNumber)}`)}
+                  onBack={() => navigate('/order-type')}
+                />
+              </CustomerAuthScene>
+            </CustomerOnly>
           }
         />
-        <Route path="/home" element={<CosHome />} />
+        <Route path="/home" element={<CustomerOnly><CosHome /></CustomerOnly>} />
         <Route path="*" element={<Navigate to={currentPath === '/menu' ? '/home' : '/'} replace />} />
       </Routes>
     </div>
   )
+  
+}
+
+function CustomerOnly({ children }) {
+  const hasCustomerSession = Boolean(
+    sessionStorage.getItem('crumblyx-customer-id')
+    && sessionStorage.getItem('crumblyx-customer-email'),
+  )
+
+  return hasCustomerSession ? children : <Navigate to="/login" replace />
 }
 
 function SplashRoute() {

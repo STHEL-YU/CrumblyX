@@ -3,9 +3,9 @@ import { Icon } from '../../components/customer_ui.jsx'
 
 const trackingSteps = [
   { title: 'Order placed', description: 'Your order has been sent to the café.' },
-  { title: 'Accepted by staff', description: 'Waiting for the shop to accept your order.' },
   { title: 'Preparing', description: 'The kitchen will start preparing your items.' },
   { title: 'Ready', description: 'Your order is ready for pickup or table delivery.' },
+  { title: 'Completed', description: 'Your order has been completed. Thank you!' },
 ]
 
 export default function CosOrderTracking({ order, onClose }) {
@@ -45,7 +45,7 @@ export default function CosOrderTracking({ order, onClose }) {
     }
   }, [order.id])
 
-  const currentStep = { new: 0, preparing: 2, ready: 3, completed: 3 }[currentOrder.status] ?? 0
+  const currentStep = { new: 0, preparing: 1, ready: 2, completed: 3 }[currentOrder.status] ?? 0
 
   return (
     <div className="tracking-backdrop" onClick={onClose}>

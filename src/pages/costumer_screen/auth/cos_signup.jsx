@@ -3,14 +3,37 @@ import { Icon, Logo } from '../../../components/customer_ui.jsx'
 
 export default function CustomerSignup({ onSubmit, onSwitch }) {
   const [showPasswords, setShowPasswords] = useState({})
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
-    onSubmit({
-      name: String(formData.get('username') || '').trim(),
-      email: String(formData.get('email') || '').trim(),
-    })
+    const name = String(formData.get('username') || '').trim()
+    const email = String(formData.get('email') || '').trim()
+    const password = String(formData.get('password') || '')
+    const confirmPassword = String(formData.get('confirmPassword') || '')
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.')
+      return
+    }
+
+    setError('')
+    setSubmitting(true)
+    try {
+      const response = await fetch('/api/customers/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Could not create your account.')
+      onSubmit(data.customer)
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   function togglePassword(name) {
@@ -43,6 +66,8 @@ export default function CustomerSignup({ onSubmit, onSwitch }) {
                   name={field === 'Password' ? 'password' : 'confirmPassword'}
                   placeholder={field === 'Password' ? 'Enter your password' : 'Confirm your password'}
                   autoComplete="new-password"
+                  minLength={field === 'Password' ? 8 : undefined}
+                  maxLength={128}
                   required
                 />
                 <button
@@ -56,7 +81,8 @@ export default function CustomerSignup({ onSubmit, onSwitch }) {
               </span>
             </label>
           ))}
-          <button className="auth-submit" type="submit">Sign Up</button>
+          {error && <p className="auth-error" role="alert">{error}</p>}
+          <button className="auth-submit" type="submit" disabled={submitting}>{submitting ? 'Creating account…' : 'Sign Up'}</button>
         </form>
         <p className="auth-switch">
           Already have an account?{' '}

@@ -36,13 +36,14 @@ function normalizeOrder(row) {
   }
 }
 
-async function listOrders(response) {
+async function listOrders(response, customerId = null) {
   const result = await query(`
     SELECT id, customer_name, customer_email, order_mode, table_number,
            items, total, status, notes, created_at
     FROM orders
+    WHERE ($1::text IS NULL OR customer_id = $1)
     ORDER BY created_at DESC
-  `)
+  `, [customerId])
   const orders = result.rows.map(normalizeOrder)
   const counts = Object.fromEntries(ORDER_STATUSES.map((status) => [status, 0]))
   for (const order of orders) counts[order.status] += 1
@@ -192,17 +193,42 @@ async function createOrder(body, response) {
 
     const total = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
     const id = randomUUID()
+    const customerName = typeof body.customerName === 'string'
+      ? body.customerName.trim().slice(0, 100) || null
+      : null
+    const customerEmail = typeof body.customerEmail === 'string'
+      ? body.customerEmail.trim().toLowerCase().slice(0, 255) || null
+      : null
+    let customerId = null
+    if (customerEmail) {
+      const customerResult = await client.query(`
+        INSERT INTO customers (id, name, email)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (email) DO UPDATE
+        SET name = COALESCE(EXCLUDED.name, customers.name), updated_at = CURRENT_TIMESTAMP
+        RETURNING id
+      `, [randomUUID(), customerName, customerEmail])
+      customerId = customerResult.rows[0].id
+    } else if (customerName) {
+      const customerResult = await client.query(`
+        INSERT INTO customers (id, name)
+        VALUES ($1, $2)
+        RETURNING id
+      `, [randomUUID(), customerName])
+      customerId = customerResult.rows[0].id
+    }
     const result = await client.query(`
       INSERT INTO orders (
-        id, customer_name, customer_email, order_mode, table_number, items, total, notes
+        id, customer_id, customer_name, customer_email, order_mode, table_number, items, total, notes
       )
-      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
       RETURNING id, customer_name, customer_email, order_mode, table_number,
                 items, total, status, notes, created_at
     `, [
       id,
-      typeof body.customerName === 'string' ? body.customerName.trim().slice(0, 100) || null : null,
-      typeof body.customerEmail === 'string' ? body.customerEmail.trim().slice(0, 255) || null : null,
+      customerId,
+      customerName,
+      customerEmail,
       body.mode,
       body.mode === 'dine-in' ? body.tableNumber.trim().slice(0, 30) : null,
       JSON.stringify(orderItems),
@@ -297,7 +323,11 @@ export default async function handler(request, response) {
       return await countOrders(response)
     }
     if (request.method === 'GET' && (!action || action === 'list')) {
-      return await listOrders(response)
+      const customerId = request.query.customerId
+      if (customerId !== undefined && (typeof customerId !== 'string' || !customerId)) {
+        throw new RequestError(400, 'Customer id must be a non-empty string.')
+      }
+      return await listOrders(response, customerId || null)
     }
     if (request.method === 'POST' && action === 'create') {
       return await createOrder(request.body, response)

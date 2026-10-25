@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Logo } from '../../components/customer_ui.jsx'
 import { DashboardIcon, StaffProfileDialog } from './staff_admin_shared.jsx'
+import StaffMessageInbox from './staff_message_inbox.jsx'
 import { adminTw } from './staff_admin_tw.js'
 import { useStaffProfile } from './staff_profile.js'
 import { STAFF_NAVIGATION } from './staff_navigation.js'
@@ -39,10 +40,6 @@ const DASHBOARD_DATA = {
     { label: 'Fri', value: -35 },
     { label: 'Sat', value: 82 },
     { label: 'Sun', value: 51 },
-  ],
-  chatMessages: [
-    { name: 'Mia Santos', message: 'Can I reserve a table for two?', time: '2 min ago' },
-    { name: 'Ethan Cruz', message: 'Is the matcha cookie available today?', time: '8 min ago' },
   ],
 }
 
@@ -236,7 +233,6 @@ function ScaffoldPanel({ section }) {
 export default function StaffDashboard() {
   const [activePage, setActivePage] = useState('Dashboard')
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [chatOpen, setChatOpen] = useState(false)
   const { profileOpen, openProfile, closeProfile } = useStaffProfile()
   const navigate = useNavigate()
 
@@ -309,16 +305,7 @@ export default function StaffDashboard() {
             <h1>{activePage}</h1>
           </div>
           <div className={adminTw("admin-top-actions")}>
-            <div className={adminTw("admin-chat-wrap")}>
-              <button type="button" className={adminTw("admin-chat-button")} aria-label="Customer Chat, 2 unread messages" aria-expanded={chatOpen} onClick={() => setChatOpen((open) => !open)}>
-                <DashboardIcon name="chat" size={18} /><span>Customer Chat</span><b aria-hidden="true">2</b>
-              </button>
-              {chatOpen && <div className={adminTw("admin-chat-popover")} role="dialog" aria-label="Recent customer chats">
-                <header><strong>Recent chats</strong><button type="button" aria-label="Close chats" onClick={() => setChatOpen(false)}><DashboardIcon name="close" size={17} /></button></header>
-                {DASHBOARD_DATA.chatMessages.map((item) => <article key={item.name}><span className={adminTw("chat-avatar")}>{item.name.split(' ').map((part) => part[0]).join('')}</span><div><strong>{item.name}</strong><p>{item.message}</p><small>{item.time}</small></div></article>)}
-                <p className={adminTw("chat-preview-note")}>Sample dashboard preview</p>
-              </div>}
-            </div>
+            <StaffMessageInbox />
             <button type="button" className={adminTw("admin-avatar top-avatar admin-avatar-trigger")} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
           </div>
         </header>
