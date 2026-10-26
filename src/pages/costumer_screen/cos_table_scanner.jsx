@@ -15,7 +15,7 @@ function getTableNumber(value) {
     const pathMatch = url.pathname.match(/\/table\/([a-z0-9-]+)\/?$/i)
     if (pathMatch) return pathMatch[1]
   } catch {
-    // Non-URL QR values are accepted below when they contain a table number.
+
   }
 
   const match = qrValue.match(/^(?:table\s*)?(?:#|:|-)?\s*([a-z0-9-]{1,12})$/i)
