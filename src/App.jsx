@@ -41,7 +41,7 @@ export default function AppLayout() {
           path="/"
           element={
             <CustomerAuthScene>
-              <CosWelcome onContinue={() => navigate('/splash')} />
+              <CosWelcome onContinue={() => navigate('/login')} />
             </CustomerAuthScene>
           }
         />

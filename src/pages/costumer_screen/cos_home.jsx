@@ -85,6 +85,7 @@ export default function CosHome() {
   const [trackingOrder, setTrackingOrder] = useState(null);
   const [messageOpen, setMessageOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [ordersOpen, setOrdersOpen] = useState(false);
   const [customer] = useState(() => ({
     id: sessionStorage.getItem("crumblyx-customer-id") || "",
     name: sessionStorage.getItem("crumblyx-customer-name") || "",
@@ -184,6 +185,16 @@ export default function CosHome() {
     : 0;
   const orderTotal = unitTotal * quantity;
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const activeTrackedOrders = trackedOrders.filter(
+    (order) => order.status !== "completed",
+  );
+  const overlayOpen =
+    Boolean(selected) ||
+    cartOpen ||
+    messageOpen ||
+    profileOpen ||
+    Boolean(trackingOrder) ||
+    ordersOpen;
 
   function startItem(product) {
     setSelected(product);
@@ -228,7 +239,6 @@ export default function CosHome() {
       ]
         .filter(Boolean)
         .join(", ");
-      customizationData = { pastrySize, spice };
     }
 
     const existingItem = cart.find(
@@ -293,7 +303,10 @@ export default function CosHome() {
       if (!response.ok)
         throw new Error(newOrder.error || "Could not place your order.");
 
-      setTrackedOrders((orders) => [...orders, newOrder]);
+      setTrackedOrders((orders) => [
+        newOrder,
+        ...orders.filter((order) => order.id !== newOrder.id),
+      ]);
       setTrackingOrder(newOrder);
       const orderedIds = new Set(itemsToOrder.map((item) => item.id));
       const remainingItems = cart.filter((item) => !orderedIds.has(item.id));
@@ -325,6 +338,16 @@ export default function CosHome() {
     });
   }
 
+  function changeCartItemQuantity(itemId, change) {
+    setCart((items) =>
+      items.map((item) =>
+        item.id === itemId
+          ? { ...item, quantity: Math.max(1, item.quantity + change) }
+          : item,
+      ),
+    );
+  }
+
   function toggleAddon(id) {
     setSelectedAddons((items) =>
       items.includes(id) ? items.filter((item) => item !== id) : [...items, id],
@@ -338,6 +361,10 @@ export default function CosHome() {
       ?.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function openOrders() {
+    setOrdersOpen(true);
+  }
+
   function logout() {
     sessionStorage.removeItem("crumblyx-customer-id");
     sessionStorage.removeItem("crumblyx-customer-name");
@@ -345,92 +372,120 @@ export default function CosHome() {
     navigate("/login", { replace: true });
   }
 
+  const navItems = [
+    {
+      key: "menu",
+      label: "Menu",
+      icon: <NavSvg name="home" />,
+      active: true,
+      onClick: () => setCategoryAndScroll("All Items"),
+    },
+    {
+      key: "orders",
+      label: "Orders",
+      icon: <NavSvg name="receipt" />,
+      badge: activeTrackedOrders.length,
+      dot: activeTrackedOrders.length > 0,
+      onClick: openOrders,
+    },
+    {
+      key: "cart",
+      label: "Cart",
+      icon: <Icon name="cart" size={22} />,
+      badge: cartCount,
+      onClick: () => setCartOpen(true),
+    },
+    {
+      key: "messages",
+      label: "Messages",
+      icon: <Icon name="chat" size={22} />,
+      onClick: () => setMessageOpen(true),
+    },
+    {
+      key: "profile",
+      label: "Profile",
+      icon: <Icon name="user" size={22} />,
+      onClick: () => setProfileOpen(true),
+    },
+  ];
+
   return (
     <>
-      <div className="menu-screen">
-        <header className="menu-header">
+      <style>{`
+        @keyframes cx-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes cx-nav-in { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+        .cx-rise { animation: cx-rise .55s cubic-bezier(.2,.8,.2,1) both; }
+        .cx-nav-in { animation: cx-nav-in .5s cubic-bezier(.2,.8,.2,1) both; }
+        .menu-scroll::-webkit-scrollbar, .category-row::-webkit-scrollbar { display: none; }
+        @media (prefers-reduced-motion: reduce) { .cx-rise, .cx-nav-in { animation: none !important; } }
+      `}</style>
+
+      <div className="menu-screen font-['Plus_Jakarta_Sans',ui-sans-serif,system-ui,sans-serif] antialiased">
+        <header className="menu-header flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <button
-            className="header-brand"
+            className="header-brand inline-flex cursor-pointer items-center gap-2.5 border-0 text-[1.05rem] font-extrabold tracking-[-0.01em] transition active:scale-95"
             onClick={() => setCategoryAndScroll("All Items")}
             aria-label="CrumblyX home"
           >
             <Logo small />
             <span>CrumblyX</span>
           </button>
-          <div className="header-actions">
-            <button
-              className="header-icon"
-              aria-label="Message CrumblyX staff"
-              onClick={() => setMessageOpen(true)}
-            >
-              <Icon name="chat" />
-            </button>
+          <div className="header-actions flex items-center gap-2">
             <CustomerNotifications
               customerId={customer.id}
               orders={trackedOrders}
               ordersLoaded={trackedOrdersLoaded}
             />
-            <button
-              className="header-icon cart-trigger"
-              aria-label={`Open cart, ${cartCount} items`}
-              onClick={() => setCartOpen(true)}
-            >
-              <Icon name="cart" />
-              {cartCount > 0 && <span className="cart-count">{cartCount}</span>}
-            </button>
-            <button
-              className={`header-icon profile-trigger ${trackedOrders.length ? "has-active-order" : ""}`}
-              aria-label={
-                trackedOrders.length
-                  ? "View customer profile, orders in progress"
-                  : "View customer profile"
-              }
-              onClick={() => setProfileOpen(true)}
-            >
-              <Icon name="user" />
-              {trackedOrders.length > 0 && (
-                <span className="profile-order-indicator" aria-hidden="true" />
-              )}
-            </button>
           </div>
         </header>
 
         <div className="menu-scroll">
-          <div className="menu-content">
-            <section className="table-banner">
-              <span className="qr-icon">
+          <div className="menu-content mx-auto w-full max-w-[720px] px-4 pb-[120px] sm:px-6">
+            <section className="table-banner cx-rise flex items-center gap-3.5 rounded-[20px] border border-[color-mix(in_srgb,currentColor_14%,transparent)] px-4 py-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.05)]">
+              <span className="qr-icon grid h-12 w-12 shrink-0 place-items-center rounded-[14px] border border-[color-mix(in_srgb,currentColor_14%,transparent)]">
                 <Icon name={orderMode === "dine-in" ? "qr" : "cup"} size={25} />
               </span>
-              <div>
-                <strong>
+              <div className="min-w-0 flex-1">
+                <strong className="text-[0.95rem] font-bold tracking-[-0.01em]">
                   {orderMode === "dine-in"
                     ? "Dine In Ordering Active"
                     : "Takeout Ordering"}
                 </strong>
-                <p>
+                <p className="m-0 mt-0.5 text-[0.8rem] font-medium leading-snug opacity-70">
                   {orderMode === "dine-in" && tableNumber
                     ? `You’re seated at Table ${tableNumber}. Your order will be brought directly to you.`
                     : "Place your order and pick it up when it’s ready."}
                 </p>
               </div>
-              <span className="online-dot" />
+              <span className="online-dot relative h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500">
+                <span className="absolute inset-0 animate-ping rounded-full bg-emerald-500 opacity-60" />
+              </span>
             </section>
 
-            <section className="menu-intro">
-              <p className="eyebrow">
-                <Icon name="leaf" size={15} /> FRESH DAILY
+            <section
+              className="menu-intro cx-rise mt-7"
+              style={{ animationDelay: "0.08s" }}
+            >
+              <p className="eyebrow m-0 flex items-center gap-1.5 text-[0.7rem] font-bold uppercase tracking-[0.2em] opacity-70">
+                <Icon name="leaf" size={15} /> Fresh Daily
               </p>
-              <h1>Our Menu</h1>
-              <p>
+              <h1 className="m-0 mt-2 text-[2rem] font-extrabold leading-tight tracking-[-0.03em] sm:text-[2.4rem]">
+                Our Menu
+              </h1>
+              <p className="m-0 mt-1.5 max-w-[420px] text-[0.92rem] font-medium leading-relaxed opacity-70">
                 Handcrafted pastries and specialty drinks, made with love every
                 morning
               </p>
             </section>
 
-            <nav className="category-row" aria-label="Menu categories">
+            <nav
+              className="category-row cx-rise -mx-4 mt-6 flex gap-2.5 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6"
+              style={{ animationDelay: "0.16s", scrollbarWidth: "none" }}
+              aria-label="Menu categories"
+            >
               {categoryOptions.map((item) => (
                 <button
-                  className={`category-chip ${category === item ? "selected" : ""}`}
+                  className={`category-chip ${category === item ? "selected" : ""} inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-full px-4 py-2.5 text-[0.85rem] font-bold transition active:scale-95 ${category === item ? "shadow-[0_8px_20px_rgba(0,0,0,0.14)]" : "hover:-translate-y-0.5"}`}
                   key={item}
                   onClick={() => setCategoryAndScroll(item)}
                 >
@@ -449,45 +504,52 @@ export default function CosHome() {
               ))}
             </nav>
 
-            <div className="product-list">
+            <div className="product-list mt-6 flex flex-col gap-4">
               {menuLoading && <MenuSkeleton />}
               {!menuLoading && menuError && (
-                <p role="alert">Could not load menu: {menuError}</p>
+                <p
+                  className="m-0 rounded-xl border border-[color-mix(in_srgb,currentColor_20%,transparent)] px-4 py-3 text-[0.88rem] font-medium"
+                  role="alert"
+                >
+                  Could not load menu: {menuError}
+                </p>
               )}
               {!menuLoading && !menuError && visibleProducts.length === 0 && (
-                <p>
+                <p className="m-0 py-10 text-center text-[0.9rem] font-medium opacity-65">
                   {products.length === 0
                     ? "No menu items are currently available."
                     : "No items in this category are currently available."}
                 </p>
               )}
               {!menuLoading &&
-                visibleProducts.map((product) => (
+                visibleProducts.map((product, index) => (
                   <article
-                    className="product-card animate-fade-in"
+                    className="product-card cx-rise group flex items-stretch gap-4 rounded-[22px] border border-[color-mix(in_srgb,currentColor_12%,transparent)] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.05)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(0,0,0,0.1)]"
+                    style={{ animationDelay: `${Math.min(index, 8) * 0.05}s` }}
                     key={product.id}
                   >
-                    <div className="relative shrink-0">
+                    <div className="relative h-[120px] w-[120px] shrink-0 overflow-hidden rounded-[18px] sm:h-[136px] sm:w-[136px]">
                       <button
-                        className="product-photo-wrap"
+                        className="product-photo-wrap !static !m-0 !block !h-full !w-full !rounded-none !border-0 !p-0 cursor-pointer"
                         onClick={() => startItem(product)}
                         aria-label={`View ${product.name}`}
                       >
                         <img
                           src={product.image}
                           alt={product.name}
-                          className="product-photo"
+                          className="product-photo !h-full !w-full object-cover transition duration-500 group-hover:scale-105"
                           loading="lazy"
                         />
-                        {product.customizable && (
-                          <span className="custom-badge">
-                            <i /> Customizable
-                          </span>
-                        )}
                       </button>
 
+                      {product.customizable && (
+                        <span className="custom-badge pointer-events-none !absolute !left-2 !top-2 z-10 whitespace-nowrap !text-[0.6rem]">
+                          <i /> Customizable
+                        </span>
+                      )}
+
                       <button
-                        className="absolute left-2 top-2 z-10 grid h-9 w-9 place-items-center rounded-full bg-[#8a4b2a] text-white shadow-md transition hover:bg-[#6f3a1f] active:scale-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8a4b2a]"
+                        className="absolute bottom-2 right-2 z-10 grid h-9 w-9 cursor-pointer place-items-center rounded-full border-0 bg-[#8a4b2a] text-white shadow-md transition hover:bg-[#6f3a1f] active:scale-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8a4b2a]"
                         onClick={() => startItem(product)}
                         aria-label={`Add ${product.name} to order`}
                         title="Add to order"
@@ -496,12 +558,15 @@ export default function CosHome() {
                       </button>
                     </div>
 
-                    <div className="product-details">
-                      <div className="product-title-line">
-                        <h2>{product.name}</h2>
-                        <strong>₱ {product.price}</strong>
+                    <div className="product-details flex min-w-0 flex-1 flex-col justify-center">
+                      <div className="product-title-line flex items-start justify-between gap-3">
+                        <h2 className="m-0 text-[1rem] font-bold leading-snug tracking-[-0.01em]">
+                          {product.name}
+                        </h2>
+                        <strong className="shrink-0 whitespace-nowrap text-[0.95rem] font-extrabold">
+                          ₱ {product.price}
+                        </strong>
                       </div>
-                      <p>{product.description}</p>
                     </div>
                   </article>
                 ))}
@@ -509,6 +574,43 @@ export default function CosHome() {
           </div>
         </div>
       </div>
+
+      {!overlayOpen && (
+        <nav
+          aria-label="Main navigation"
+          className="cx-nav-in fixed inset-x-0 bottom-0 z-30 flex justify-center px-4 pb-[max(env(safe-area-inset-bottom),12px)] font-['Plus_Jakarta_Sans',ui-sans-serif,system-ui,sans-serif]"
+        >
+          <ul className="m-0 flex w-full max-w-[440px] list-none items-center justify-between gap-1 rounded-[28px] border border-[color-mix(in_srgb,currentColor_12%,transparent)] bg-white/85 p-2 shadow-[0_12px_40px_rgba(0,0,0,0.16)] backdrop-blur-xl">
+            {navItems.map((item) => (
+              <li className="flex-1" key={item.key}>
+                <button
+                  type="button"
+                  onClick={item.onClick}
+                  aria-label={item.label}
+                  aria-current={item.active ? "page" : undefined}
+                  className={`relative flex w-full cursor-pointer flex-col items-center gap-1 rounded-[20px] border-0 px-1 py-2.5 transition active:scale-90 ${
+                    item.active
+                      ? "bg-[#8a4b2a] text-white shadow-[0_8px_18px_rgba(138,75,42,0.35)]"
+                      : "bg-transparent opacity-70 hover:bg-[color-mix(in_srgb,currentColor_7%,transparent)] hover:opacity-100"
+                  }`}
+                >
+                  <span className="relative grid h-[22px] place-items-center">
+                    {item.icon}
+                    {item.badge > 0 && (
+                      <span className="absolute -right-2.5 -top-1.5 grid h-[17px] min-w-[17px] place-items-center rounded-full bg-[#8a4b2a] px-1 text-[0.62rem] font-extrabold leading-none text-white ring-2 ring-white">
+                        {item.badge > 99 ? "99+" : item.badge}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-[0.66rem] font-bold tracking-[0.01em]">
+                    {item.label}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
 
       {selected && (
         <div className="sheet-backdrop" onClick={() => setSelected(null)}>
@@ -540,7 +642,11 @@ export default function CosHome() {
                   <h2>{selected.name}</h2>
                   <strong>₱ {selected.price}</strong>
                 </div>
-                <p className="detail-description">{selected.description}</p>
+                {selected.description && (
+                  <p className="detail-description">
+                    <strong>Description:</strong> {selected.description}
+                  </p>
+                )}
                 {selected.customizable && (
                   <div className="custom-options">
                     {selected.isBeverage ? (
@@ -689,11 +795,33 @@ export default function CosHome() {
                       <div className="cart-item-info">
                         <strong>{item.name}</strong>
                         <p>
-                          {item.quantity} × ₱ {item.price}
+                          ₱ {item.price} each
                           {item.customization && (
                             <small>{item.customization}</small>
                           )}
                         </p>
+                        <div
+                          className="cart-quantity-stepper"
+                          aria-label={`${item.name} quantity`}
+                        >
+                          <button
+                            type="button"
+                            aria-label={`Decrease ${item.name} quantity`}
+                            disabled={orderSubmitting || item.quantity <= 1}
+                            onClick={() => changeCartItemQuantity(item.id, -1)}
+                          >
+                            <Icon name="minus" size={14} />
+                          </button>
+                          <span>{item.quantity}</span>
+                          <button
+                            type="button"
+                            aria-label={`Increase ${item.name} quantity`}
+                            disabled={orderSubmitting}
+                            onClick={() => changeCartItemQuantity(item.id, 1)}
+                          >
+                            <Icon name="plus" size={14} />
+                          </button>
+                        </div>
                       </div>
                       <button
                         className="remove-cart-item"
@@ -745,6 +873,107 @@ export default function CosHome() {
         </div>
       )}
 
+      {ordersOpen && (
+        <div className="orders-backdrop" onClick={() => setOrdersOpen(false)}>
+          <section
+            className="orders-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Your orders"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-header">
+              <h2>My Orders</h2>
+              <button
+                className="close-button profile-close"
+                type="button"
+                aria-label="Close orders"
+                onClick={() => setOrdersOpen(false)}
+              >
+                <Icon name="close" size={18} />
+              </button>
+            </header>
+            <div className="orders-list">
+              {!trackedOrdersLoaded && !trackedOrdersError && (
+                <p className="profile-orders-empty" role="status">
+                  Loading your orders…
+                </p>
+              )}
+              {trackedOrdersError && (
+                <p className="profile-orders-error" role="alert">
+                  Could not load your orders: {trackedOrdersError}
+                </p>
+              )}
+              {trackedOrdersLoaded &&
+                !trackedOrdersError &&
+                trackedOrders.length === 0 && (
+                  <p className="profile-orders-empty">
+                    You haven’t placed any orders yet.
+                  </p>
+                )}
+              {trackedOrders.map((order) => (
+                <article className="profile-order" key={order.id}>
+                  <div className="profile-order-heading">
+                    <span
+                      className={`profile-order-status profile-order-status--${order.status}`}
+                    >
+                      <i />
+                      {{
+                        new: "Order placed",
+                        preparing: "Preparing",
+                        ready: "Ready",
+                        completed: "Completed",
+                      }[order.status] || "Order placed"}
+                    </span>
+                    <strong>#{order.id}</strong>
+                  </div>
+                  <h4>Order</h4>
+                  <p>
+                    {order.mode === "dine-in"
+                      ? `Dine in · Table ${order.tableNumber}`
+                      : "Takeout"}
+                    {" · "}₱ {Number(order.total).toFixed(2)}
+                    {order.createdAt && (
+                      <>
+                        <br />
+                        {new Date(order.createdAt).toLocaleString()}
+                      </>
+                    )}
+                  </p>
+                  <ul className="profile-order-items">
+                    {order.items.map((item) => (
+                      <li key={item.id}>
+                        <span>
+                          {item.quantity} × {item.name}
+                        </span>
+                        <strong>
+                          {order.status === "completed"
+                            ? "Completed"
+                            : item.checked
+                              ? "Prepared"
+                              : order.status === "new"
+                                ? "Queued"
+                                : "Preparing"}
+                        </strong>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrdersOpen(false);
+                      setTrackingOrder(order);
+                    }}
+                  >
+                    Track order
+                  </button>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+
       <CustomerMessage
         isOpen={messageOpen}
         onClose={() => setMessageOpen(false)}
@@ -770,6 +999,35 @@ export default function CosHome() {
         />
       )}
     </>
+  );
+}
+
+function NavSvg({ name, size = 22 }) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.9,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": true,
+  };
+  if (name === "home") {
+    return (
+      <svg {...common}>
+        <path d="M3 10.5 12 3l9 7.5" />
+        <path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5" />
+        <path d="M9.5 21v-6h5v6" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common}>
+      <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
+      <path d="M9 8h6M9 12h6" />
+    </svg>
   );
 }
 

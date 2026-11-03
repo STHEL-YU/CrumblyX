@@ -43,7 +43,7 @@ export default function CosProfile({ customer, orders, ordersError, onClose, onL
             <div><dt>Email</dt><dd>{customer.email || 'Not provided'}</dd></div>
           </dl>
         </div>
-        <section className="profile-orders" aria-label="Your orders">
+        {/* <section className="profile-orders" aria-label="Your orders">
           <h3 className="profile-orders-title">My orders</h3>
           {ordersError && <p className="profile-orders-error" role="status">{ordersError}</p>}
           {orders.length === 0 && !ordersError && <p className="profile-orders-empty">No orders yet.</p>}
@@ -71,7 +71,7 @@ export default function CosProfile({ customer, orders, ordersError, onClose, onL
                 <button type="button" onClick={() => onTrackOrder(order)}>Track order</button>
               </article>
             ))}
-        </section>
+        </section> */}
         <button className="profile-logout" type="button" onClick={onLogout}>
           <Icon name="arrow" size={17} />
           Log out
