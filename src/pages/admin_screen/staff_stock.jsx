@@ -1,13 +1,14 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Logo } from '../../components/customer_ui.jsx'
-import { DashboardIcon, StaffProfileDialog } from './staff_admin_shared.jsx'
+import { DashboardIcon, StaffProfileDialog, StaffSpinner } from './staff_admin_shared.jsx'
+import Sidebar from './staff_sidebar.jsx'
+import StaffMessageInbox from './staff_message_inbox.jsx'
 import { adminTw } from './staff_admin_tw.js'
 import { useStaffProfile } from './staff_profile.js'
-import { STAFF_NAVIGATION } from './staff_navigation.js'
 
 const LOW_STOCK_THRESHOLD = 5
 const SKELETON_ROWS = [0, 1, 2, 3, 4]
+const STOCK_PAGE_SIZE = 8
 
 /* ---------- shared class strings ---------- */
 const inputCls = 'mt-1.5 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-400 transition focus:border-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-500/15'
@@ -159,7 +160,10 @@ function StockEditor({ item, onClose, onSave }) {
 
           <div className={adminTw('flex justify-end gap-2 pt-2')}>
             <button type="button" className={adminTw(ghostBtn)} onClick={onClose}>Cancel</button>
-            <button type="submit" className={adminTw(primaryBtn)} disabled={saving}>{saving ? 'Saving…' : 'Save quantity'}</button>
+            <button type="submit" className={adminTw(primaryBtn)} disabled={saving} aria-busy={saving}>
+              {saving && <StaffSpinner />}
+              {saving ? 'Saving…' : 'Save quantity'}
+            </button>
           </div>
         </form>
       </section>
@@ -222,10 +226,10 @@ export default function StaffStock() {
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [statusFilter, setStatusFilter] = useState('all')
+  const [page, setPage] = useState(1)
   const [sort, setSort] = useState({ key: 'name', direction: 'asc' })
   const [editingItem, setEditingItem] = useState(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [chatOpen, setChatOpen] = useState(false)
   const { profileOpen, openProfile, closeProfile } = useStaffProfile()
   const [toast, setToast] = useState(null)
   const toastTimer = useRef(null)
@@ -256,6 +260,12 @@ export default function StaffStock() {
         return sort.direction === 'asc' ? comparison : -comparison
       })
   }, [items, deferredQuery, sort, statusFilter])
+  const pageCount = Math.max(1, Math.ceil(visibleStocks.length / STOCK_PAGE_SIZE))
+  const visiblePage = Math.min(page, pageCount)
+  const pageStocks = useMemo(
+    () => visibleStocks.slice((visiblePage - 1) * STOCK_PAGE_SIZE, visiblePage * STOCK_PAGE_SIZE),
+    [visibleStocks, visiblePage],
+  )
 
   useEffect(() => () => window.clearTimeout(toastTimer.current), [])
 
@@ -317,6 +327,7 @@ export default function StaffStock() {
   }
 
   function sortBy(key) {
+    setPage(1)
     setSort((current) => ({ key, direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc' }))
   }
 
@@ -345,11 +356,13 @@ export default function StaffStock() {
     setDrawerOpen(false)
     if (name === 'Dashboard') navigate('/staff/dashboard')
     else if (name === 'Orders') navigate('/staff/orders')
+    else if (name === 'Sales') navigate('/staff/sales')
     else if (name === 'Menu') navigate('/staff/menu')
     else if (name === 'Customers') navigate('/staff/customers')
   }
 
   function toggleStatusFilter(status) {
+    setPage(1)
     setStatusFilter((current) => (current === status ? 'all' : status))
   }
 
@@ -361,25 +374,20 @@ export default function StaffStock() {
   return (
     <div className={adminTw('admin-dashboard staff-stock-app')}>
       <style>{`
-        .staff-stock-app { min-height: calc(100dvh - 2.5rem) !important; }
         .stock-table th, .stock-table td { font-size: 0.875rem !important; line-height: 1.25rem !important; }
         .stock-table thead th { font-size: 0.8125rem !important; font-weight: 600 !important; color: #78716c; }
         .stock-table thead button { font: inherit !important; color: inherit !important; }
         .stock-table thead th[aria-sort="ascending"], .stock-table thead th[aria-sort="descending"] { color: #1c1917; }
       `}</style>
-      <button className={adminTw(`admin-drawer-scrim ${drawerOpen ? 'visible' : ''}`)} type="button" aria-label="Close navigation menu" onClick={() => setDrawerOpen(false)} />
-      <aside className={adminTw(`admin-sidebar ${drawerOpen ? 'drawer-open' : ''}`)} aria-label="Staff navigation">
-        <div className={adminTw('admin-brand')}><Logo small /><span>CrumblyX</span><button type="button" className={adminTw('admin-drawer-close')} aria-label="Close menu" onClick={() => setDrawerOpen(false)}><DashboardIcon name="close" /></button></div>
-        <div className={adminTw('admin-side-divider')} />
-        <nav className={adminTw('admin-nav')} aria-label="Main navigation">
-          {STAFF_NAVIGATION.map((entry) => (
-            <button type="button" key={entry.name} className={adminTw(`admin-nav-item ${entry.name === 'Stocks' ? 'active' : ''}`)} aria-current={entry.name === 'Stocks' ? 'page' : undefined} onClick={() => navigateSection(entry.name)}>
-              <DashboardIcon name={entry.icon} /><span>{entry.name}</span>
-            </button>
-          ))}
-        </nav>
-        <div className={adminTw('admin-account')}><div className={adminTw('admin-side-divider')} /><div className={adminTw('admin-user')}><button type="button" className={adminTw('admin-avatar admin-avatar-trigger')} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button><span className={adminTw('admin-user-copy')}><strong>John Doe</strong><small>doe@example.com</small></span><button type="button" className={adminTw('admin-logout')} aria-label="Log out" title="Log out" onClick={logout}><DashboardIcon name="logout" size={18} /></button></div></div>
-      </aside>
+      <Sidebar
+        activeRoute="Stocks"
+        drawerOpen={drawerOpen}
+        onNavigate={navigateSection}
+        onClose={() => setDrawerOpen(false)}
+        profileOpen={profileOpen}
+        onOpenProfile={openProfile}
+        onLogout={logout}
+      />
 
       <main className={adminTw('admin-main staff-stock-main')}>
         <header className={adminTw('admin-topbar')}>
@@ -388,35 +396,34 @@ export default function StaffStock() {
             <DashboardIcon name="stocks" size={24} /><h1>Stocks</h1>
           </div>
           <div className={adminTw('admin-top-actions')}>
-            <div className={adminTw('admin-chat-wrap')}>
-              <button type="button" className={adminTw('admin-chat-button')} aria-label="Customer Chat, 2 unread messages" aria-expanded={chatOpen} onClick={() => setChatOpen((open) => !open)}><DashboardIcon name="chat" size={18} /><span>Customer Chat</span><b aria-hidden="true">2</b></button>
-              {chatOpen && <div className={adminTw('admin-chat-popover')} role="dialog" aria-label="Customer chat preview"><header><strong>Customer Chat</strong><button type="button" aria-label="Close chats" onClick={() => setChatOpen(false)}><DashboardIcon name="close" size={17} /></button></header><p className={adminTw('px-3 py-2 text-sm text-stone-600')}>2 unread customer messages</p></div>}
-            </div>
+            <StaffMessageInbox />
             <button type="button" className={adminTw('admin-avatar top-avatar admin-avatar-trigger')} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
           </div>
         </header>
 
-        <div className={adminTw('mx-auto w-full max-w-6xl space-y-5 p-4 md:p-6')}>
+        <div className={adminTw('min-h-0 flex-1 overflow-y-auto overscroll-contain')}>
+        <div className={adminTw('mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6 lg:p-8')}>
           {/* Title and search */}
-          <section className={adminTw('flex flex-col gap-4 md:flex-row md:items-end md:justify-between')} aria-label="Search inventory">
+          <section className={adminTw('flex flex-col gap-5 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm sm:p-6 xl:flex-row xl:items-center xl:justify-between')} aria-label="Search inventory">
             <div>
-              <h2 className={adminTw('text-2xl font-semibold tracking-tight text-stone-900')}>Inventory</h2>
-              <p className={adminTw('mt-1 text-sm text-stone-500')} aria-live="polite">
+              <p className={adminTw('text-xs font-bold uppercase tracking-[0.16em] text-amber-700')}>Stock control</p>
+              <h2 className={adminTw('mt-1 text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl')}>Inventory</h2>
+              <p className={adminTw('mt-1.5 text-sm text-stone-500')} aria-live="polite">
                 {loading ? 'Loading inventory…' : needsAttention > 0 ? `${needsAttention} ${needsAttention === 1 ? 'item needs' : 'items need'} restocking` : 'Everything is well stocked'}
               </p>
             </div>
-            <label className={adminTw('relative block md:w-80')}>
+            <label className={adminTw('relative block min-w-0 sm:w-80 xl:shrink-0')}>
               <span className={adminTw('pointer-events-none absolute inset-y-0 left-3 grid place-items-center text-stone-400')}><DashboardIcon name="search" size={18} /></span>
               <span className={adminTw('sr-only')}>Search stock by item name or category</span>
               <input
                 type="search"
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => { setQuery(event.target.value); setPage(1) }}
                 placeholder="Search items"
-                className={adminTw('w-full rounded-lg border border-stone-300 bg-white py-2.5 pl-10 pr-9 text-sm text-stone-900 placeholder:text-stone-400 transition focus:border-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-500/15 [&::-webkit-search-cancel-button]:appearance-none')}
+                className={adminTw('min-h-11 w-full rounded-xl border border-stone-200 bg-stone-50 py-2.5 pl-10 pr-9 text-sm text-stone-900 placeholder:text-stone-400 transition focus:border-amber-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-amber-500/15 [&::-webkit-search-cancel-button]:appearance-none')}
               />
               {query && (
-                <button type="button" aria-label="Clear search" onClick={() => setQuery('')} className={adminTw('absolute inset-y-0 right-2 my-auto h-7 w-7 rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-stone-700')}>
+                <button type="button" aria-label="Clear search" onClick={() => { setQuery(''); setPage(1) }} className={adminTw('absolute inset-y-0 right-2 my-auto h-7 w-7 rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-stone-700')}>
                   <DashboardIcon name="close" size={15} />
                 </button>
               )}
@@ -425,15 +432,15 @@ export default function StaffStock() {
 
           {/* Summary cards double as status filters */}
           <section className={adminTw('grid grid-cols-2 gap-3 lg:grid-cols-4')} aria-label="Inventory overview" aria-live="polite">
-            <SummaryCard label="Total items" value={countValue(counts.total)} icon="boxOpen" tone="coffee" selected={statusFilter === 'all'} onClick={() => setStatusFilter('all')} />
+            <SummaryCard label="Total items" value={countValue(counts.total)} icon="boxOpen" tone="coffee" selected={statusFilter === 'all'} onClick={() => { setStatusFilter('all'); setPage(1) }} />
             <SummaryCard label="In stock" value={countValue(counts['in-stock'])} icon="checkCircle" tone="green" selected={statusFilter === 'in-stock'} onClick={() => toggleStatusFilter('in-stock')} />
             <SummaryCard label="Low stock" value={countValue(counts['low-stock'])} icon="warning" tone="amber" selected={statusFilter === 'low-stock'} onClick={() => toggleStatusFilter('low-stock')} />
             <SummaryCard label="Out of stock" value={countValue(counts['out-of-stock'])} icon="alertCircle" tone="red" selected={statusFilter === 'out-of-stock'} onClick={() => toggleStatusFilter('out-of-stock')} />
           </section>
 
           {/* Table card */}
-          <section className={adminTw('overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm')} aria-labelledby="staff-stock-table-title">
-            <div className={adminTw('flex items-center justify-between gap-3 border-b border-stone-200 px-4 py-3')}>
+          <section className={adminTw('overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-[0_8px_30px_rgba(28,25,23,0.06)]')} aria-labelledby="staff-stock-table-title">
+            <div className={adminTw('flex flex-col gap-3 border-b border-stone-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6')}>
               <div>
                 <h2 id="staff-stock-table-title" className={adminTw('text-sm font-semibold text-stone-900')}>
                   {statusFilter === 'all' ? 'All items' : STOCK_STATUS[statusFilter].label}
@@ -443,7 +450,7 @@ export default function StaffStock() {
               <span className={adminTw('shrink-0 text-sm text-stone-500')}>{visibleStocks.length} {visibleStocks.length === 1 ? 'item' : 'items'}</span>
             </div>
             <div className={adminTw('overflow-x-auto')}>
-              <table className={adminTw('stock-table w-full min-w-[640px] border-collapse text-sm')}>
+              <table className={adminTw('stock-table w-full min-w-[760px] border-collapse text-sm')}>
                 <caption className={adminTw('sr-only')}>CrumblyX inventory stock levels and actions</caption>
                 <thead className={adminTw('bg-stone-50')}>
                   <tr className={adminTw('border-b border-stone-200')}>
@@ -456,7 +463,7 @@ export default function StaffStock() {
                 </thead>
                 <tbody className={adminTw('divide-y divide-stone-100')}>
                   {loading && <SkeletonRows />}
-                  {!loading && visibleStocks.map((item) => {
+                  {!loading && pageStocks.map((item) => {
                     const status = getStockStatus(item.quantity)
                     return (
                       <tr key={item.id} className={adminTw('transition-colors hover:bg-amber-50/40')}>
@@ -494,7 +501,34 @@ export default function StaffStock() {
                 </tbody>
               </table>
             </div>
+            <footer className={adminTw('flex flex-col gap-3 border-t border-stone-100 bg-stone-50/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6')}>
+              <p className={adminTw('text-sm text-stone-500')} aria-live="polite">
+                Showing {visibleStocks.length ? (visiblePage - 1) * STOCK_PAGE_SIZE + 1 : 0}–{Math.min(visiblePage * STOCK_PAGE_SIZE, visibleStocks.length)} of {visibleStocks.length} items
+              </p>
+              <div className={adminTw('flex items-center gap-2')}>
+                <button
+                  type="button"
+                  className={adminTw('min-h-10 rounded-lg border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-45')}
+                  onClick={() => setPage(Math.max(1, visiblePage - 1))}
+                  disabled={visiblePage <= 1 || loading}
+                >
+                  Previous
+                </button>
+                <span className={adminTw('min-w-20 text-center text-sm font-semibold tabular-nums text-stone-600')} aria-label={`Page ${visiblePage} of ${pageCount}`}>
+                  {visiblePage} / {pageCount}
+                </span>
+                <button
+                  type="button"
+                  className={adminTw('min-h-10 rounded-lg border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-45')}
+                  onClick={() => setPage(Math.min(pageCount, visiblePage + 1))}
+                  disabled={visiblePage >= pageCount || loading}
+                >
+                  Next
+                </button>
+              </div>
+            </footer>
           </section>
+        </div>
         </div>
       </main>
 

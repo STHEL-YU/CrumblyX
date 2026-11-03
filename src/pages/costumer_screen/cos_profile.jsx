@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Icon } from '../../components/customer_ui.jsx'
 
 const ORDER_STATUS_LABELS = {
@@ -9,18 +9,30 @@ const ORDER_STATUS_LABELS = {
 }
 
 export default function CosProfile({ customer, orders, ordersError, onClose, onLogout, onTrackOrder }) {
+  const [loggingOut, setLoggingOut] = useState(false)
 
   useEffect(() => {
     function handleKeyDown(event) {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape' && !loggingOut) onClose()
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+  }, [loggingOut, onClose])
+
+  function handleLogout() {
+    if (loggingOut) return
+    setLoggingOut(true)
+    window.setTimeout(onLogout, 500)
+  }
 
   return (
-    <div className="profile-backdrop" onClick={onClose}>
+    <div
+      className="profile-backdrop"
+      onClick={() => {
+        if (!loggingOut) onClose()
+      }}
+    >
       <section
         className="profile-panel"
         role="dialog"
@@ -30,7 +42,7 @@ export default function CosProfile({ customer, orders, ordersError, onClose, onL
       >
         <header className="profile-header">
           <h2 id="customer-profile-title">My Profile</h2>
-          <button className="close-button profile-close" type="button" aria-label="Close profile" onClick={onClose}>
+          <button className="close-button profile-close" type="button" aria-label="Close profile" onClick={onClose} disabled={loggingOut}>
             <Icon name="close" size={18} />
           </button>
         </header>
@@ -72,9 +84,18 @@ export default function CosProfile({ customer, orders, ordersError, onClose, onL
               </article>
             ))}
         </section> */}
-        <button className="profile-logout" type="button" onClick={onLogout}>
-          <Icon name="arrow" size={17} />
-          Log out
+        <button className="profile-logout" type="button" onClick={handleLogout} disabled={loggingOut} aria-busy={loggingOut}>
+          {loggingOut ? (
+            <>
+              <span className="logout-spinner" aria-hidden="true" />
+              Logging out…
+            </>
+          ) : (
+            <>
+              <Icon name="arrow" size={17} />
+              Log out
+            </>
+          )}
         </button>
       </section>
     </div>

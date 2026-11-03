@@ -30,10 +30,15 @@ export async function createMenuTable() {
       name VARCHAR(100) NOT NULL,
       category VARCHAR(50) NOT NULL,
       price NUMERIC(10, 2) NOT NULL CHECK (price >= 0),
+      description VARCHAR(500) NOT NULL DEFAULT '',
       available BOOLEAN NOT NULL DEFAULT TRUE,
       image TEXT NOT NULL DEFAULT '',
       created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
+  `)
+  await query(`
+    ALTER TABLE menu_items
+      ADD COLUMN IF NOT EXISTS description VARCHAR(500) NOT NULL DEFAULT ''
   `)
 }
 

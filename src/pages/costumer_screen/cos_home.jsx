@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon, Logo } from "../../components/customer_ui.jsx";
 import CustomerMessage from "./customer_message.jsx";
@@ -86,11 +86,24 @@ export default function CosHome() {
   const [messageOpen, setMessageOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [ordersOpen, setOrdersOpen] = useState(false);
-  const [customer] = useState(() => ({
+  const [customer, setCustomer] = useState(() => ({
     id: sessionStorage.getItem("crumblyx-customer-id") || "",
     name: sessionStorage.getItem("crumblyx-customer-name") || "",
     email: sessionStorage.getItem("crumblyx-customer-email") || "",
   }));
+  const [dismissedOrderIds, setDismissedOrderIds] = useState(() => {
+    try {
+      const saved = JSON.parse(
+        sessionStorage.getItem(
+          `crumblyx-dismissed-orders-${sessionStorage.getItem("crumblyx-customer-id") || ""}`,
+        ) || "[]",
+      );
+      return new Set(Array.isArray(saved) ? saved : []);
+    } catch {
+      return new Set();
+    }
+  });
+  const orderSwipeStartX = useRef(null);
   const [trackedOrdersError, setTrackedOrdersError] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [coffeeType, setCoffeeType] = useState("ICED");
@@ -154,7 +167,7 @@ export default function CosHome() {
     }
 
     refreshTrackedOrders();
-    const timer = window.setInterval(refreshTrackedOrders, 10000);
+    const timer = window.setInterval(refreshTrackedOrders, 3000);
     return () => {
       controller.abort();
       window.clearInterval(timer);
@@ -187,6 +200,9 @@ export default function CosHome() {
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const activeTrackedOrders = trackedOrders.filter(
     (order) => order.status !== "completed",
+  );
+  const visibleTrackedOrders = trackedOrders.filter(
+    (order) => !dismissedOrderIds.has(order.id),
   );
   const overlayOpen =
     Boolean(selected) ||
@@ -280,6 +296,35 @@ export default function CosHome() {
     );
     if (itemsToOrder.length === 0 || orderSubmitting) return;
 
+    let orderNotes = "";
+    if (orderMode !== "dine-in") {
+      try {
+        const takeoutDetails = JSON.parse(
+          sessionStorage.getItem("crumblyx-takeout-details") || "null",
+        );
+        if (!takeoutDetails?.address || !takeoutDetails?.phone) {
+          setOrderError(
+            "Please enter your takeout address and phone number before ordering.",
+          );
+          return;
+        }
+        orderNotes = [
+          `Takeout contact: ${takeoutDetails.name || customer.name}`,
+          `Email: ${takeoutDetails.email || customer.email}`,
+          `Phone: ${takeoutDetails.phone}`,
+          `Address: ${takeoutDetails.address}`,
+          takeoutDetails.landmark ? `Landmark: ${takeoutDetails.landmark}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n");
+      } catch {
+        setOrderError(
+          "Takeout details are invalid. Please choose Take Out again.",
+        );
+        return;
+      }
+    }
+
     setOrderSubmitting(true);
     setOrderError("");
     try {
@@ -291,6 +336,7 @@ export default function CosHome() {
           tableNumber,
           customerName: customer.name,
           customerEmail: customer.email,
+          notes: orderNotes,
           items: itemsToOrder.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
@@ -365,10 +411,29 @@ export default function CosHome() {
     setOrdersOpen(true);
   }
 
+  function dismissCompletedOrder(order) {
+    if (order.status !== "completed") return;
+    const nextIds = new Set(dismissedOrderIds);
+    nextIds.add(order.id);
+    setDismissedOrderIds(nextIds);
+    sessionStorage.setItem(
+      `crumblyx-dismissed-orders-${customer.id}`,
+      JSON.stringify([...nextIds]),
+    );
+  }
+
+  function finishOrderSwipe(order, event) {
+    if (order.status !== "completed" || orderSwipeStartX.current == null) return;
+    const distance = event.changedTouches[0].clientX - orderSwipeStartX.current;
+    orderSwipeStartX.current = null;
+    if (Math.abs(distance) >= 80) dismissCompletedOrder(order);
+  }
+
   function logout() {
     sessionStorage.removeItem("crumblyx-customer-id");
     sessionStorage.removeItem("crumblyx-customer-name");
     sessionStorage.removeItem("crumblyx-customer-email");
+    sessionStorage.removeItem("crumblyx-takeout-details");
     navigate("/login", { replace: true });
   }
 
@@ -504,7 +569,7 @@ export default function CosHome() {
               ))}
             </nav>
 
-            <div className="product-list mt-6 flex flex-col gap-4">
+            <div className="product-list mt-6 flex flex-col gap-3">
               {menuLoading && <MenuSkeleton />}
               {!menuLoading && menuError && (
                 <p
@@ -524,11 +589,11 @@ export default function CosHome() {
               {!menuLoading &&
                 visibleProducts.map((product, index) => (
                   <article
-                    className="product-card cx-rise group flex items-stretch gap-4 rounded-[22px] border border-[color-mix(in_srgb,currentColor_12%,transparent)] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.05)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(0,0,0,0.1)]"
+                    className="product-card cx-rise group flex items-stretch gap-3 rounded-[22px] border border-[color-mix(in_srgb,currentColor_12%,transparent)] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.05)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(0,0,0,0.1)]"
                     style={{ animationDelay: `${Math.min(index, 8) * 0.05}s` }}
                     key={product.id}
                   >
-                    <div className="relative h-[120px] w-[120px] shrink-0 overflow-hidden rounded-[18px] sm:h-[136px] sm:w-[136px]">
+                    <div className="relative h-[104px] w-[104px] shrink-0 self-start overflow-hidden rounded-[16px] sm:h-[116px] sm:w-[116px]">
                       <button
                         className="product-photo-wrap !static !m-0 !block !h-full !w-full !rounded-none !border-0 !p-0 cursor-pointer"
                         onClick={() => startItem(product)}
@@ -541,31 +606,46 @@ export default function CosHome() {
                           loading="lazy"
                         />
                       </button>
-
                       {product.customizable && (
-                        <span className="custom-badge pointer-events-none !absolute !left-2 !top-2 z-10 whitespace-nowrap !text-[0.6rem]">
+                        <span className="custom-badge pointer-events-none !absolute !left-1.5 !top-1.5 z-10 whitespace-nowrap !px-2 !py-1 !text-[0.55rem]">
                           <i /> Customizable
                         </span>
                       )}
-
-                      <button
-                        className="absolute bottom-2 right-2 z-10 grid h-9 w-9 cursor-pointer place-items-center rounded-full border-0 bg-[#8a4b2a] text-white shadow-md transition hover:bg-[#6f3a1f] active:scale-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8a4b2a]"
-                        onClick={() => startItem(product)}
-                        aria-label={`Add ${product.name} to order`}
-                        title="Add to order"
-                      >
-                        <Icon name="cart" size={17} />
-                      </button>
                     </div>
 
-                    <div className="product-details flex min-w-0 flex-1 flex-col justify-center">
-                      <div className="product-title-line flex items-start justify-between gap-3">
-                        <h2 className="m-0 text-[1rem] font-bold leading-snug tracking-[-0.01em]">
+                    <div className="product-details flex min-w-0 flex-1 flex-col justify-between">
+                      <div className="product-card-heading">
+                        <h2 className="m-0 min-w-0 flex-1 text-[0.92rem] font-bold leading-snug tracking-[-0.01em] sm:text-[1rem]">
                           {product.name}
                         </h2>
-                        <strong className="shrink-0 whitespace-nowrap text-[0.95rem] font-extrabold">
+                        <button
+                          className="product-info-button"
+                          type="button"
+                          onClick={() => startItem(product)}
+                          aria-label={`View ${product.name} details`}
+                          title="View details"
+                        >
+                          i
+                        </button>
+                      </div>
+                      {product.description && (
+                        <p className="detail-description product-card-description">
+                          {product.description}
+                        </p>
+                      )}
+                      <div className="product-card-footer">
+                        <strong className="product-card-price">
                           ₱ {product.price}
                         </strong>
+                        <button
+                          className="add-order-button product-card-add"
+                          type="button"
+                          onClick={() => startItem(product)}
+                          aria-label={`Add ${product.name} to order`}
+                        >
+                          <Icon name="cart" size={15} />
+                          Add
+                        </button>
                       </div>
                     </div>
                   </article>
@@ -633,7 +713,8 @@ export default function CosHome() {
                 </button>
                 {selected.customizable && (
                   <span className="custom-badge detail-badge">
-                    <i /> Customizable
+                    <i />
+                    {selected.name}
                   </span>
                 )}
               </div>
@@ -906,13 +987,30 @@ export default function CosHome() {
               )}
               {trackedOrdersLoaded &&
                 !trackedOrdersError &&
-                trackedOrders.length === 0 && (
+                visibleTrackedOrders.length === 0 && (
                   <p className="profile-orders-empty">
-                    You haven’t placed any orders yet.
+                    {trackedOrders.length === 0
+                      ? "You haven’t placed any orders yet."
+                      : "All orders have been removed from this list."}
                   </p>
                 )}
-              {trackedOrders.map((order) => (
-                <article className="profile-order" key={order.id}>
+              {visibleTrackedOrders.map((order) => (
+                <article
+                  className={`profile-order ${order.status === "completed" ? "profile-order--dismissible" : ""}`}
+                  key={order.id}
+                  onTouchStart={
+                    order.status === "completed"
+                      ? (event) => {
+                          orderSwipeStartX.current = event.touches[0].clientX;
+                        }
+                      : undefined
+                  }
+                  onTouchEnd={
+                    order.status === "completed"
+                      ? (event) => finishOrderSwipe(order, event)
+                      : undefined
+                  }
+                >
                   <div className="profile-order-heading">
                     <span
                       className={`profile-order-status profile-order-status--${order.status}`}
@@ -958,6 +1056,11 @@ export default function CosHome() {
                       </li>
                     ))}
                   </ul>
+                  {order.status === "completed" && (
+                    <small className="profile-order-swipe-hint">
+                      Swipe to remove
+                    </small>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -982,12 +1085,13 @@ export default function CosHome() {
       {profileOpen && (
         <CosProfile
           customer={customer}
-          orders={trackedOrders}
-          ordersError={trackedOrdersError}
           onClose={() => setProfileOpen(false)}
-          onTrackOrder={(order) => {
-            setProfileOpen(false);
-            setTrackingOrder(order);
+          onCustomerUpdated={(updatedCustomer) => {
+            setCustomer((current) => ({ ...current, ...updatedCustomer }));
+            sessionStorage.setItem(
+              "crumblyx-customer-name",
+              updatedCustomer.name,
+            );
           }}
           onLogout={logout}
         />

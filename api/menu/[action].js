@@ -11,7 +11,7 @@ export default async function handler(request, response) {
   try {
     if (request.method === 'GET' && (!action || action === 'list')) {
       const result = await query(`
-        SELECT id, name, category, price, available, image
+        SELECT id, name, category, price, description, available, image
         FROM menu_items
         ORDER BY name ASC
       `)
@@ -19,31 +19,33 @@ export default async function handler(request, response) {
     }
 
     if (request.method === 'POST' && action === 'create') {
-      const { id, name, category, price, available = true, image = '' } = request.body
-      if (!name?.trim() || !category || !Number.isFinite(Number(price)) || Number(price) < 0) {
-        return json(response, 400, { error: 'Valid name, category, and price are required.' })
+      const { id, name, category, price, description = '', available = true, image = '' } = request.body
+      if (!name?.trim() || !category || !Number.isFinite(Number(price)) || Number(price) < 0
+        || typeof description !== 'string' || description.length > 500) {
+        return json(response, 400, { error: 'Valid name, category, price, and description are required.' })
       }
 
       const result = await query(`
-        INSERT INTO menu_items (id, name, category, price, available, image)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING id, name, category, price, available, image
-      `, [id || randomUUID(), name.trim(), category, Number(price), Boolean(available), image])
+        INSERT INTO menu_items (id, name, category, price, description, available, image)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, name, category, price, description, available, image
+      `, [id || randomUUID(), name.trim(), category, Number(price), description.trim(), Boolean(available), image])
       return json(response, 201, result.rows[0])
     }
 
     if (request.method === 'PUT' && action === 'update') {
-      const { id, name, category, price, available, image } = request.body
-      if (!id || !name?.trim() || !category || !Number.isFinite(Number(price)) || Number(price) < 0) {
-        return json(response, 400, { error: 'Valid id, name, category, and price are required.' })
+      const { id, name, category, price, description = '', available, image } = request.body
+      if (!id || !name?.trim() || !category || !Number.isFinite(Number(price)) || Number(price) < 0
+        || typeof description !== 'string' || description.length > 500) {
+        return json(response, 400, { error: 'Valid id, name, category, price, and description are required.' })
       }
 
       const result = await query(`
         UPDATE menu_items
-        SET name = $1, category = $2, price = $3, available = $4, image = $5
-        WHERE id = $6
-        RETURNING id, name, category, price, available, image
-      `, [name.trim(), category, Number(price), Boolean(available), image || '', id])
+        SET name = $1, category = $2, price = $3, description = $4, available = $5, image = $6
+        WHERE id = $7
+        RETURNING id, name, category, price, description, available, image
+      `, [name.trim(), category, Number(price), description.trim(), Boolean(available), image || '', id])
       if (result.rowCount === 0) return json(response, 404, { error: 'Menu item not found.' })
       return json(response, 200, result.rows[0])
     }

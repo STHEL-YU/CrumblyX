@@ -1,7 +1,8 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Logo } from '../../components/customer_ui.jsx'
-import { DashboardIcon, StaffProfileDialog } from './staff_admin_shared.jsx'
+import { DashboardIcon, StaffProfileDialog, StaffSpinner } from './staff_admin_shared.jsx'
+import Sidebar from './staff_sidebar.jsx'
+import StaffMessageInbox from './staff_message_inbox.jsx'
 import { adminTw } from './staff_admin_tw.js'
 import { useStaffProfile } from './staff_profile.js'
 import { STAFF_NAVIGATION } from './staff_navigation.js'
@@ -9,6 +10,7 @@ import { STAFF_NAVIGATION } from './staff_navigation.js'
 const CATEGORY_FILTERS = ['All', 'Pastry', 'Beverages']
 const MENU_CACHE_KEY = 'crumblyx.menu.v1'
 const SKELETON_ROWS = [0, 1, 2, 3, 4, 5]
+const MENU_PAGE_SIZE = 8
 
 /* ---------- shared class strings ---------- */
 const inputCls = 'mt-1.5 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-400 transition focus:border-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-500/15'
@@ -41,7 +43,12 @@ async function apiRequest(path, method = 'GET', body, signal) {
 }
 
 function normalizeMenuItem(item) {
-  return { ...item, price: Number(item.price), available: Boolean(item.available) }
+  return {
+    ...item,
+    price: Number(item.price),
+    description: item.description || '',
+    available: Boolean(item.available),
+  }
 }
 
 function normalizeStockRecord(record) {
@@ -169,6 +176,7 @@ function DialogHeader({ id, title, closeLabel, onClose }) {
 
 function MenuItemDialog({ item, onClose, onSave }) {
   const [name, setName] = useState(item?.name || '')
+  const [description, setDescription] = useState(item?.description || '')
   const [category, setCategory] = useState(item?.category || 'Pastry')
   const [price, setPrice] = useState(item ? String(item.price) : '')
   const [available, setAvailable] = useState(item?.available ?? true)
@@ -203,7 +211,7 @@ function MenuItemDialog({ item, onClose, onSave }) {
     }
   }
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault()
     const trimmedName = name.trim()
     const numericPrice = Number(price)
@@ -215,16 +223,22 @@ function MenuItemDialog({ item, onClose, onSave }) {
       setError('Enter a valid price.')
       return
     }
-    onSave({
-      ...item,
-      id: item?.id || `${trimmedName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`,
-      name: trimmedName,
-      category,
-      price: numericPrice,
-      available,
-      image,
-    })
-    onClose()
+    setProcessing(true)
+    try {
+      const saved = await onSave({
+        ...item,
+        id: item?.id || `${trimmedName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`,
+        name: trimmedName,
+        description: description.trim(),
+        category,
+        price: numericPrice,
+        available,
+        image,
+      })
+      if (saved) onClose()
+    } finally {
+      setProcessing(false)
+    }
   }
 
   return (
@@ -239,6 +253,21 @@ function MenuItemDialog({ item, onClose, onSave }) {
         <label className={adminTw('block text-sm font-medium text-stone-700')}>
           Item name
           <input className={adminTw(inputCls)} value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Cinnamon Roll" maxLength={100} />
+        </label>
+
+        <label className={adminTw('block text-sm font-medium text-stone-700')}>
+          Description
+          <textarea
+            className={adminTw(`${inputCls} min-h-24 resize-y`)}
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder="Describe the ingredients, flavor, or what comes with this item."
+            maxLength={500}
+            rows={3}
+          />
+          <span className={adminTw('mt-1 block text-xs font-normal text-stone-500')}>
+            {description.length}/500 characters
+          </span>
         </label>
 
         <div className={adminTw('grid grid-cols-2 gap-3')}>
@@ -263,7 +292,7 @@ function MenuItemDialog({ item, onClose, onSave }) {
               : <span className={adminTw('grid h-16 w-16 place-items-center rounded-lg bg-white text-stone-400 ring-1 ring-stone-200')}><DashboardIcon name="boxOpen" size={22} /></span>}
             <div className={adminTw('min-w-0 flex-1')}>
               <label className={adminTw('inline-flex cursor-pointer rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm font-semibold text-stone-700 transition hover:bg-stone-100 focus-within:ring-4 focus-within:ring-stone-400/20')}>
-                <span>{processing ? 'Processing…' : image ? 'Change image' : 'Upload image'}</span>
+                <span className={adminTw('inline-flex items-center gap-2')}>{processing && <StaffSpinner className="size-3" />}{processing ? 'Processing…' : image ? 'Change image' : 'Upload image'}</span>
                 <input className={adminTw('sr-only')} type="file" accept="image/*" onChange={uploadImage} aria-label="Upload menu item image" disabled={processing} />
               </label>
               <p className={adminTw('mt-1 text-xs text-stone-500')}>Photos are resized automatically.</p>
@@ -283,14 +312,17 @@ function MenuItemDialog({ item, onClose, onSave }) {
 
         <div className={adminTw('flex justify-end gap-2 pt-2')}>
           <button type="button" className={adminTw(ghostBtn)} onClick={onClose}>Cancel</button>
-          <button type="submit" className={adminTw(primaryBtn)} disabled={processing}>{isEditing ? 'Save changes' : 'Add item'}</button>
+          <button type="submit" className={adminTw(primaryBtn)} disabled={processing} aria-busy={processing}>
+            {processing && <StaffSpinner />}
+            {processing ? 'Saving…' : isEditing ? 'Save changes' : 'Add item'}
+          </button>
         </div>
       </form>
     </DialogShell>
   )
 }
 
-function MenuDeleteDialog({ item, onClose, onConfirm }) {
+function MenuDeleteDialog({ item, onClose, onConfirm, loading }) {
   const dialogRef = useRef(null)
   useDialogA11y(dialogRef, onClose)
 
@@ -302,7 +334,10 @@ function MenuDeleteDialog({ item, onClose, onConfirm }) {
       </p>
       <div className={adminTw('mt-6 flex justify-end gap-2')}>
         <button type="button" className={adminTw(ghostBtn)} onClick={onClose}>Cancel</button>
-        <button type="button" className={adminTw('inline-flex items-center justify-center rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-500/30')} onClick={onConfirm}>Delete item</button>
+        <button type="button" className={adminTw('inline-flex items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-500/30 disabled:cursor-wait disabled:opacity-70')} onClick={onConfirm} disabled={loading} aria-busy={loading}>
+          {loading && <StaffSpinner />}
+          {loading ? 'Deleting…' : 'Delete item'}
+        </button>
       </div>
     </DialogShell>
   )
@@ -329,7 +364,7 @@ function Switch({ checked, onChange, label, disabled = false }) {
   )
 }
 
-const MenuRow = memo(function MenuRow({ item, soldOut, onToggle, onEdit, onDelete }) {
+const MenuRow = memo(function MenuRow({ item, soldOut, onToggle, onEdit, onDelete, toggling }) {
   const available = item.available && !soldOut
   return (
     <tr className={adminTw('transition-colors hover:bg-amber-50/40')}>
@@ -347,7 +382,8 @@ const MenuRow = memo(function MenuRow({ item, soldOut, onToggle, onEdit, onDelet
       <td data-label="Price" className={adminTw('px-4 py-3 font-medium tabular-nums text-stone-800')}>₱{item.price.toFixed(2)}</td>
       <td data-label="Available" className={adminTw('px-4 py-3')}>
         <span className={adminTw('flex items-center gap-2')}>
-          <Switch checked={available} onChange={() => onToggle(item.id)} label={`${item.name} available`} disabled={soldOut} />
+          <Switch checked={available} onChange={() => onToggle(item.id)} label={`${item.name} available`} disabled={soldOut || toggling} />
+          {toggling && <StaffSpinner className="size-3 text-stone-500" />}
           <span className={adminTw(`text-xs font-medium ${available ? 'text-emerald-700' : 'text-stone-500'}`)}>{available ? 'Available' : 'Sold out'}</span>
         </span>
       </td>
@@ -386,14 +422,17 @@ export default function StaffMenu() {
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [categoryFilter, setCategoryFilter] = useState('All')
+  const [page, setPage] = useState(1)
   const [sort, setSort] = useState({ key: 'name', direction: 'asc' })
   const [toast, setToast] = useState(null)
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
   const [deletedItem, setDeletedItem] = useState(null)
+  const [pendingToggleId, setPendingToggleId] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [undoing, setUndoing] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [chatOpen, setChatOpen] = useState(false)
   const { profileOpen, openProfile, closeProfile } = useStaffProfile()
   const [section, setSection] = useState('Menu')
   const toastTimer = useRef(null)
@@ -455,7 +494,7 @@ export default function StaffMenu() {
     const normalizedQuery = deferredQuery.trim().toLocaleLowerCase()
     return items
       .filter((item) => categoryFilter === 'All' || item.category === categoryFilter)
-      .filter((item) => !normalizedQuery || `${item.name} ${item.category}`.toLocaleLowerCase().includes(normalizedQuery))
+      .filter((item) => !normalizedQuery || `${item.name} ${item.category} ${item.description}`.toLocaleLowerCase().includes(normalizedQuery))
       .sort((first, second) => {
         const firstValue = first[sort.key]
         const secondValue = second[sort.key]
@@ -465,14 +504,22 @@ export default function StaffMenu() {
         return sort.direction === 'asc' ? comparison : -comparison
       })
   }, [items, deferredQuery, categoryFilter, sort])
+  const pageCount = Math.max(1, Math.ceil(filteredItems.length / MENU_PAGE_SIZE))
+  const visiblePage = Math.min(page, pageCount)
+  const pageItems = useMemo(
+    () => filteredItems.slice((visiblePage - 1) * MENU_PAGE_SIZE, visiblePage * MENU_PAGE_SIZE),
+    [filteredItems, visiblePage],
+  )
 
   const toggleAvailability = useCallback(async (itemId) => {
+    if (pendingToggleId) return
     const currentItem = itemsRef.current.find((item) => item.id === itemId)
     if (!currentItem) return
     if (soldOutIds.has(itemId)) return
     const available = !currentItem.available
     const updatedItem = { ...currentItem, available }
 
+    setPendingToggleId(itemId)
     setItems((current) => current.map((item) => (item.id === itemId ? updatedItem : item)))
     try {
       await menuRequest('update', 'PUT', updatedItem)
@@ -480,8 +527,10 @@ export default function StaffMenu() {
     } catch (error) {
       setItems((current) => current.map((item) => (item.id === itemId ? currentItem : item)))
       showToast({ message: error.message })
+    } finally {
+      setPendingToggleId('')
     }
-  }, [showToast, soldOutIds])
+  }, [pendingToggleId, showToast, soldOutIds])
 
   async function saveItem(item) {
     const existing = items.some((current) => current.id === item.id)
@@ -495,12 +544,15 @@ export default function StaffMenu() {
       setAddDialogOpen(false)
       setEditingItem(null)
       showToast({ message: `${savedItem.name} ${existing ? 'updated' : 'added'}` })
+      return true
     } catch (error) {
       showToast({ message: error.message })
+      return false
     }
   }
 
   async function deleteItem(item) {
+    setDeleting(true)
     try {
       await menuRequest(`delete?id=${encodeURIComponent(item.id)}`, 'DELETE', { id: item.id })
       setItems((current) => current.filter((entry) => entry.id !== item.id))
@@ -508,6 +560,8 @@ export default function StaffMenu() {
       setPendingDelete(null)
       showToast({ message: error.message })
       return
+    } finally {
+      setDeleting(false)
     }
     setPendingDelete(null)
     setDeletedItem(item)
@@ -517,7 +571,8 @@ export default function StaffMenu() {
   }
 
   async function undoDelete() {
-    if (!deletedItem) return
+    if (!deletedItem || undoing) return
+    setUndoing(true)
     try {
       const restoredItem = normalizeMenuItem(await menuRequest('create', 'POST', deletedItem))
       setItems((current) => (current.some((item) => item.id === restoredItem.id) ? current : [...current, restoredItem]))
@@ -525,6 +580,8 @@ export default function StaffMenu() {
     } catch (error) {
       showToast({ message: error.message })
       return
+    } finally {
+      setUndoing(false)
     }
     setDeletedItem(null)
     window.clearTimeout(deletedItemTimer.current)
@@ -535,6 +592,7 @@ export default function StaffMenu() {
   }
 
   function sortBy(key) {
+    setPage(1)
     setSort((current) => ({
       key,
       direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
@@ -550,6 +608,7 @@ export default function StaffMenu() {
     const routes = {
       Dashboard: '/staff/dashboard',
       Orders: '/staff/orders',
+      Sales: '/staff/sales',
       Stocks: '/staff/stocks',
       Customers: '/staff/customers',
     }
@@ -582,25 +641,20 @@ export default function StaffMenu() {
   return (
     <div className={adminTw('admin-dashboard staff-menu-app')}>
       <style>{`
-        .staff-menu-app { min-height: calc(100dvh - 2.5rem) !important; }
         .menu-table th, .menu-table td { font-size: 0.875rem !important; line-height: 1.25rem !important; }
         .menu-table thead th { font-size: 0.8125rem !important; font-weight: 600 !important; color: #78716c; }
         .menu-table thead button { font: inherit !important; color: inherit !important; }
         .menu-table thead th[aria-sort="ascending"], .menu-table thead th[aria-sort="descending"] { color: #1c1917; }
       `}</style>
-      <button className={adminTw(`admin-drawer-scrim ${drawerOpen ? 'visible' : ''}`)} type="button" aria-label="Close navigation menu" onClick={() => setDrawerOpen(false)} />
-      <aside className={adminTw(`admin-sidebar ${drawerOpen ? 'drawer-open' : ''}`)} aria-label="Staff navigation">
-        <div className={adminTw('admin-brand')}><Logo small /><span>CrumblyX</span><button type="button" className={adminTw('admin-drawer-close')} aria-label="Close menu" onClick={() => setDrawerOpen(false)}><DashboardIcon name="close" /></button></div>
-        <div className={adminTw('admin-side-divider')} />
-        <nav className={adminTw('admin-nav')} aria-label="Main navigation">
-          {STAFF_NAVIGATION.map((item) => (
-            <button type="button" key={item.name} className={adminTw(`admin-nav-item ${section === item.name ? 'active' : ''}`)} aria-current={section === item.name ? 'page' : undefined} onClick={() => navigateSection(item.name)}>
-              <DashboardIcon name={item.icon} /><span>{item.name}</span>
-            </button>
-          ))}
-        </nav>
-        <div className={adminTw('admin-account')}><div className={adminTw('admin-side-divider')} /><div className={adminTw('admin-user')}><button type="button" className={adminTw('admin-avatar admin-avatar-trigger')} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button><span className={adminTw('admin-user-copy')}><strong>John Doe</strong><small>doe@example.com</small></span><button type="button" className={adminTw('admin-logout')} aria-label="Log out" title="Log out" onClick={logout}><DashboardIcon name="logout" size={18} /></button></div></div>
-      </aside>
+      <Sidebar
+        activeRoute={section}
+        drawerOpen={drawerOpen}
+        onNavigate={navigateSection}
+        onClose={() => setDrawerOpen(false)}
+        profileOpen={profileOpen}
+        onOpenProfile={openProfile}
+        onLogout={logout}
+      />
 
       <main className={adminTw('admin-main staff-menu-main')}>
         <header className={adminTw('admin-topbar')}>
@@ -609,70 +663,69 @@ export default function StaffMenu() {
             <DashboardIcon name="plate" size={24} /><h1>{section}</h1>
           </div>
           <div className={adminTw('admin-top-actions')}>
-            <div className={adminTw('admin-chat-wrap')}>
-              <button type="button" className={adminTw('admin-chat-button')} aria-label="Customer Chat, 2 unread messages" aria-expanded={chatOpen} onClick={() => setChatOpen((open) => !open)}><DashboardIcon name="chat" size={18} /><span>Customer Chat</span><b aria-hidden="true">2</b></button>
-              {chatOpen && <div className={adminTw('admin-chat-popover')} role="dialog" aria-label="Customer chat preview"><header><strong>Customer Chat</strong><button type="button" aria-label="Close chats" onClick={() => setChatOpen(false)}><DashboardIcon name="close" size={17} /></button></header><p className={adminTw('px-3 py-2 text-sm text-stone-600')}>2 unread customer messages</p></div>}
-            </div>
+            <StaffMessageInbox />
             <button type="button" className={adminTw('admin-avatar top-avatar admin-avatar-trigger')} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
           </div>
         </header>
 
         {section === 'Menu' ? (
-          <div className={adminTw('mx-auto w-full max-w-6xl space-y-5 p-4 md:p-6')}>
+          <div className={adminTw('min-h-0 flex-1 overflow-y-auto overscroll-contain')}>
+          <div className={adminTw('mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6 lg:p-8')}>
             {/* Title, search and primary action */}
-            <section className={adminTw('flex flex-col gap-4 md:flex-row md:items-end md:justify-between')}>
+            <section className={adminTw('flex flex-col gap-5 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm sm:p-6 xl:flex-row xl:items-center xl:justify-between')}>
               <div>
-                <h2 className={adminTw('text-2xl font-semibold tracking-tight text-stone-900')}>Menu management</h2>
-                <p className={adminTw('mt-1 text-sm text-stone-500')} aria-live="polite">
+                <p className={adminTw('text-xs font-bold uppercase tracking-[0.16em] text-amber-700')}>Catalog</p>
+                <h2 className={adminTw('mt-1 text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl')}>Menu management</h2>
+                <p className={adminTw('mt-1.5 text-sm text-stone-500')} aria-live="polite">
                   {menuLoading ? 'Loading your menu…' : `${availableCount} of ${items.length} items available`}
                 </p>
               </div>
-              <div className={adminTw('flex flex-col gap-3 sm:flex-row sm:items-center')}>
-                <label className={adminTw('relative block sm:w-72')}>
+              <div className={adminTw('flex w-full flex-col gap-3 sm:flex-row sm:items-center xl:w-auto')}>
+                <label className={adminTw('relative block min-w-0 flex-1 sm:w-80 xl:flex-none')}>
                   <span className={adminTw('pointer-events-none absolute inset-y-0 left-3 grid place-items-center text-stone-400')}><DashboardIcon name="search" size={18} /></span>
                   <span className={adminTw('sr-only')}>Search menu items by name or category</span>
                   <input
                     type="search"
                     value={query}
-                    onChange={(event) => setQuery(event.target.value)}
+                    onChange={(event) => { setQuery(event.target.value); setPage(1) }}
                     placeholder="Search items"
-                    className={adminTw('w-full rounded-lg border border-stone-300 bg-white py-2.5 pl-10 pr-9 text-sm text-stone-900 placeholder:text-stone-400 transition focus:border-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-500/15 [&::-webkit-search-cancel-button]:appearance-none')}
+                    className={adminTw('min-h-11 w-full rounded-xl border border-stone-200 bg-stone-50 py-2.5 pl-10 pr-9 text-sm text-stone-900 placeholder:text-stone-400 transition focus:border-amber-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-amber-500/15 [&::-webkit-search-cancel-button]:appearance-none')}
                   />
                   {query && (
-                    <button type="button" aria-label="Clear search" onClick={() => setQuery('')} className={adminTw('absolute inset-y-0 right-2 my-auto h-7 w-7 rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-stone-700')}>
+                    <button type="button" aria-label="Clear search" onClick={() => { setQuery(''); setPage(1) }} className={adminTw('absolute inset-y-0 right-2 my-auto h-7 w-7 rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-stone-700')}>
                       <DashboardIcon name="close" size={15} />
                     </button>
                   )}
                 </label>
-                <button type="button" className={adminTw(primaryBtn)} onClick={() => setAddDialogOpen(true)}>
+                <button type="button" className={adminTw(`${primaryBtn} min-h-11 rounded-xl bg-amber-700 px-5 hover:bg-amber-800`)} onClick={() => setAddDialogOpen(true)}>
                   <DashboardIcon name="plus" size={15} />Add item
                 </button>
               </div>
             </section>
 
             {/* Table card */}
-            <section className={adminTw('overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm')} aria-labelledby="staff-menu-table-title">
-              <div className={adminTw('flex items-center justify-between gap-3 border-b border-stone-200 px-4 py-3')}>
+            <section className={adminTw('overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-[0_8px_30px_rgba(28,25,23,0.06)]')} aria-labelledby="staff-menu-table-title">
+              <div className={adminTw('flex flex-col gap-4 border-b border-stone-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6')}>
                 <div role="group" aria-label="Filter by category" className={adminTw('inline-flex rounded-lg bg-stone-100 p-1')}>
                   {CATEGORY_FILTERS.map((category) => (
                     <button
                       type="button"
                       key={category}
                       aria-pressed={categoryFilter === category}
-                      onClick={() => setCategoryFilter(category)}
-                      className={adminTw(`rounded-md px-3.5 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-500/25 ${categoryFilter === category ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600 hover:text-stone-900'}`)}
+                      onClick={() => { setCategoryFilter(category); setPage(1) }}
+                      className={adminTw(`rounded-md px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-500/25 ${categoryFilter === category ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600 hover:text-stone-900'}`)}
                     >
                       {category}
                     </button>
                   ))}
                 </div>
-                <span className={adminTw('hidden text-sm text-stone-500 sm:block')}>{filteredItems.length} shown</span>
+                <span className={adminTw('text-sm font-medium text-stone-500')}>{filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'} found</span>
               </div>
 
               <div className={adminTw('overflow-x-auto')}>
-                <table className={adminTw('menu-table w-full min-w-[640px] border-collapse text-sm')}>
+                <table className={adminTw('menu-table w-full min-w-[760px] border-collapse text-sm')}>
                   <caption id="staff-menu-table-title" className={adminTw('sr-only')}>CrumblyX menu item availability and prices</caption>
-                  <thead className={adminTw('bg-stone-50')}>
+                  <thead className={adminTw('bg-stone-50/80')}>
                     <tr className={adminTw('border-b border-stone-200')}>
                       {sortHeader('Item', 'name')}
                       {sortHeader('Category', 'category')}
@@ -683,8 +736,8 @@ export default function StaffMenu() {
                   </thead>
                   <tbody className={adminTw('divide-y divide-stone-100')}>
                     {menuLoading && <SkeletonRows />}
-                    {!menuLoading && filteredItems.map((item) => (
-                      <MenuRow key={item.id} item={item} soldOut={soldOutIds.has(item.id)} onToggle={toggleAvailability} onEdit={setEditingItem} onDelete={setPendingDelete} />
+                    {!menuLoading && pageItems.map((item) => (
+                      <MenuRow key={item.id} item={item} soldOut={soldOutIds.has(item.id)} onToggle={toggleAvailability} onEdit={setEditingItem} onDelete={setPendingDelete} toggling={pendingToggleId === item.id} />
                     ))}
                     {isEmpty && (
                       <tr>
@@ -698,7 +751,34 @@ export default function StaffMenu() {
                   </tbody>
                 </table>
               </div>
+              <footer className={adminTw('flex flex-col gap-3 border-t border-stone-100 bg-stone-50/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6')}>
+                <p className={adminTw('text-sm text-stone-500')} aria-live="polite">
+                  Showing {filteredItems.length ? (visiblePage - 1) * MENU_PAGE_SIZE + 1 : 0}–{Math.min(visiblePage * MENU_PAGE_SIZE, filteredItems.length)} of {filteredItems.length} items
+                </p>
+                <div className={adminTw('flex items-center gap-2')}>
+                  <button
+                    type="button"
+                    className={adminTw('min-h-10 rounded-lg border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-45')}
+                    onClick={() => setPage(Math.max(1, visiblePage - 1))}
+                    disabled={visiblePage <= 1 || menuLoading}
+                  >
+                    Previous
+                  </button>
+                  <span className={adminTw('min-w-20 text-center text-sm font-semibold tabular-nums text-stone-600')} aria-label={`Page ${visiblePage} of ${pageCount}`}>
+                    {visiblePage} / {pageCount}
+                  </span>
+                  <button
+                    type="button"
+                    className={adminTw('min-h-10 rounded-lg border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-45')}
+                    onClick={() => setPage(Math.min(pageCount, visiblePage + 1))}
+                    disabled={visiblePage >= pageCount || menuLoading}
+                  >
+                    Next
+                  </button>
+                </div>
+              </footer>
             </section>
+          </div>
           </div>
         ) : (
           <section className={adminTw('mx-auto mt-16 max-w-sm px-4 text-center')}>
@@ -713,12 +793,12 @@ export default function StaffMenu() {
         <div className={adminTw('fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-3 rounded-xl bg-stone-900 px-4 py-3 text-sm text-white shadow-xl')} role="status">
           <DashboardIcon name={toast.canUndo ? 'trash' : 'check'} size={16} />
           <span>{toast.message}</span>
-          {toast.canUndo && deletedItem && <button type="button" className={adminTw('font-semibold text-amber-300 hover:text-amber-200')} onClick={undoDelete}>Undo</button>}
+          {toast.canUndo && deletedItem && <button type="button" className={adminTw('inline-flex items-center gap-2 font-semibold text-amber-300 hover:text-amber-200 disabled:opacity-70')} onClick={undoDelete} disabled={undoing}>{undoing && <StaffSpinner className="size-3" />}{undoing ? 'Restoring…' : 'Undo'}</button>}
         </div>
       )}
       {addDialogOpen && <MenuItemDialog onClose={() => setAddDialogOpen(false)} onSave={saveItem} />}
       {editingItem && <MenuItemDialog item={editingItem} onClose={() => setEditingItem(null)} onSave={saveItem} />}
-      {pendingDelete && <MenuDeleteDialog item={pendingDelete} onClose={() => setPendingDelete(null)} onConfirm={confirmDelete} />}
+      {pendingDelete && <MenuDeleteDialog item={pendingDelete} onClose={() => setPendingDelete(null)} onConfirm={confirmDelete} loading={deleting} />}
       {profileOpen && <StaffProfileDialog onClose={closeProfile} />}
     </div>
   )

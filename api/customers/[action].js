@@ -89,12 +89,27 @@ export default async function handler(request, response) {
 	try {
 		if (request.method === 'POST' && action === 'register') {
 			const credentials = validateCredentials(request.body, true)
+			const phone = typeof request.body.phone === 'string' ? request.body.phone.trim() : ''
+			const location = typeof request.body.location === 'string' ? request.body.location.trim() : ''
+			if (!/^09\d{2}\s?\d{3}\s?\d{4}$/.test(phone)) {
+				throw new RequestError(400, 'Enter a valid PH mobile number, such as 0917 123 4567.')
+			}
+			if (!location || location.length > 120) {
+				throw new RequestError(400, 'Enter your address or location (up to 120 characters).')
+			}
 			const passwordHash = await hashPassword(credentials.password)
 			const result = await query(`
-				INSERT INTO customers (id, name, email, password_hash, status)
-				VALUES ($1, $2, $3, $4, 'active')
-				RETURNING id, name, email, status
-			`, [randomUUID(), credentials.name, credentials.email, passwordHash])
+				INSERT INTO customers (id, name, email, password_hash, phone, location, status)
+				VALUES ($1, $2, $3, $4, $5, $6, 'active')
+				RETURNING id, name, email, phone, location, status
+			`, [
+				randomUUID(),
+				credentials.name,
+				credentials.email,
+				passwordHash,
+				phone,
+				location,
+			])
 			return json(response, 201, { customer: result.rows[0] })
 		}
 
@@ -112,6 +127,58 @@ export default async function handler(request, response) {
 			}
 			const { password_hash, ...publicCustomer } = customer
 			return json(response, 200, { customer: publicCustomer })
+		}
+
+		if (request.method === 'PUT' && action === 'profile') {
+			const body = request.body
+			if (typeof body?.id !== 'string' || !body.id.trim()) {
+				throw new RequestError(400, 'Customer id is required.')
+			}
+			if (typeof body.currentPassword !== 'string'
+				|| body.currentPassword.length < 8 || body.currentPassword.length > 128) {
+				throw new RequestError(400, 'Current password must be between 8 and 128 characters.')
+			}
+			if (typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 100) {
+				throw new RequestError(400, 'Name is required and must be at most 100 characters.')
+			}
+			if (typeof body.location !== 'string' || body.location.trim().length > 120) {
+				throw new RequestError(400, 'Location must be at most 120 characters.')
+			}
+			if (typeof body.phone !== 'string'
+				|| (body.phone.trim() && !/^09\d{2}\s?\d{3}\s?\d{4}$/.test(body.phone.trim()))) {
+				throw new RequestError(400, 'Enter a valid PH mobile number, such as 0917 123 4567.')
+			}
+			if (body.newPassword != null && body.newPassword !== ''
+				&& (typeof body.newPassword !== 'string' || body.newPassword.length < 8 || body.newPassword.length > 128)) {
+				throw new RequestError(400, 'New password must be between 8 and 128 characters.')
+			}
+
+			const result = await query(
+				'SELECT password_hash FROM customers WHERE id = $1 AND status = $2',
+				[body.id.trim(), 'active'],
+			)
+			const customer = result.rows[0]
+			if (!customer || !await verifyPassword(body.currentPassword, customer.password_hash)) {
+				throw new RequestError(401, 'Current password is incorrect.')
+			}
+
+			const passwordHash = body.newPassword
+				? await hashPassword(body.newPassword)
+				: customer.password_hash
+			const updated = await query(`
+				UPDATE customers
+				SET name = $1, location = $2, phone = $3, password_hash = $4,
+						updated_at = CURRENT_TIMESTAMP
+				WHERE id = $5
+				RETURNING id, name, email, phone, location
+			`, [
+				body.name.trim(),
+				body.location.trim() || null,
+				body.phone.trim() || null,
+				passwordHash,
+				body.id.trim(),
+			])
+			return json(response, 200, { customer: updated.rows[0] })
 		}
 
 		if (request.method === 'GET' && (!action || action === 'list')) {

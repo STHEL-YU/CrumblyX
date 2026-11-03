@@ -6,6 +6,8 @@ function DashboardIcon({ name, size = 19 }) {
   const iconPaths = {
     dashboard: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
     orders: <><path d="M6 3h12a2 2 0 0 1 2 2v16l-4-2-4 2-4-2-4 2V5a2 2 0 0 1 2-2Z" /><path d="M8 8h8M8 12h8M8 16h4" /></>,
+    sales: <><path d="M4 19V5M4 19h17" /><path d="m7 15 4-4 3 2 6-7" /><path d="M16 6h4v4" /></>,
+    chart: <><path d="M4 19V5M4 19h17" /><path d="M8 15v-4M13 15V8M18 15V5" /></>,
     menu: <><path d="M4 6h16M4 12h16M4 18h16" /><circle cx="7" cy="6" r=".5" fill="currentColor" /><circle cx="7" cy="12" r=".5" fill="currentColor" /><circle cx="7" cy="18" r=".5" fill="currentColor" /></>,
     stocks: <><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9Z" /><path d="m3.5 7.8 8.5 4.4 8.5-4.4M12 12.2V21M7.5 5.2l9 4.6" /></>,
     customers: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 5.2a3.5 3.5 0 0 1 0 6.7M17 14a6 6 0 0 1 4.5 5.8" /></>,
@@ -30,6 +32,15 @@ function DashboardIcon({ name, size = 19 }) {
     check: <path d="m5 12 4 4L19 6" />,
   }
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{iconPaths[name] || iconPaths.dashboard}</svg>
+}
+
+function StaffSpinner({ className = '' }) {
+  return (
+    <span
+      className={adminTw(`staff-action-spinner ${className}`)}
+      aria-hidden="true"
+    />
+  )
 }
 
 function StaffProfileDialog({ onClose }) {
@@ -64,25 +75,34 @@ function StaffProfileDialog({ onClose }) {
 
   return (
     <div className={adminTw("staff-profile-backdrop fixed inset-0 z-[60] grid place-items-center bg-stone-950/45 p-4 backdrop-blur-sm")} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section ref={dialogRef} className={adminTw("staff-profile-dialog max-h-[min(90dvh,660px)] w-full max-w-[420px] overflow-auto rounded-3xl border border-amber-100 bg-[#fffaf3] p-6 text-amber-950 shadow-2xl")} role="dialog" aria-modal="true" aria-labelledby="staff-profile-title">
-        <header className={adminTw("flex items-start justify-between gap-4 border-b border-amber-100 pb-4")}>
-          <div><span className={adminTw("text-[9px] font-extrabold tracking-[1.25px] text-amber-900/60")}>CRUMBLYX ACCOUNT</span><h2 id="staff-profile-title" className={adminTw("mt-1 text-2xl font-extrabold text-amber-950")}>Staff Profile</h2></div>
-          <button className={adminTw("grid size-9 shrink-0 place-items-center rounded-full bg-rose-500 text-white transition hover:bg-rose-600 active:scale-95")} type="button" aria-label="Close staff profile" onClick={onClose}><DashboardIcon name="close" size={18} /></button>
+      <section ref={dialogRef} className={adminTw("staff-profile-dialog max-h-[min(90dvh,660px)] w-full max-w-[440px] overflow-auto rounded-2xl border border-stone-200 bg-white p-5 font-sans text-stone-900 shadow-[0_24px_80px_rgba(28,25,23,0.2)] sm:p-7")} role="dialog" aria-modal="true" aria-labelledby="staff-profile-title">
+        <header className={adminTw("flex items-start justify-between gap-4")}>
+          <div>
+            <p className={adminTw("text-xs font-semibold uppercase tracking-[0.14em] text-amber-700")}>Account</p>
+            <h2 id="staff-profile-title" className={adminTw("mt-1 text-2xl font-bold tracking-tight text-stone-900")}>Staff profile</h2>
+          </div>
+          <button className={adminTw("grid size-9 shrink-0 place-items-center rounded-lg text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500")} type="button" aria-label="Close staff profile" onClick={onClose}><DashboardIcon name="close" size={18} /></button>
         </header>
-        <div className={adminTw("staff-profile-identity flex items-center gap-4 py-5")}>
-          <span className={adminTw("staff-profile-avatar grid size-16 shrink-0 place-items-center rounded-full border-[3px] border-amber-100 bg-gradient-to-br from-amber-800 to-amber-300 text-lg font-extrabold text-white shadow-md")} aria-hidden="true">JD</span>
-          <div><h3 className={adminTw("text-lg font-extrabold")}>John Doe</h3><p className={adminTw("mt-1 inline-flex min-h-6 items-center rounded-full bg-green-100 px-3 text-xs font-extrabold text-green-900")}>Administrator</p></div>
+        <div className={adminTw("mt-6 flex items-center gap-4 rounded-xl border border-stone-200 bg-stone-50 p-4")}>
+          <span className={adminTw("staff-profile-avatar grid size-14 shrink-0 place-items-center rounded-full bg-gradient-to-br from-amber-700 to-amber-500 text-base font-bold tracking-wide text-white shadow-sm")} aria-hidden="true">JD</span>
+          <div className={adminTw("min-w-0")}>
+            <h3 className={adminTw("truncate text-base font-semibold tracking-tight text-stone-900")}>John Doe</h3>
+            <p className={adminTw("mt-0.5 truncate text-sm text-stone-500")}>doe@example.com</p>
+            <span className={adminTw("mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700")}>
+              <i className={adminTw("size-1.5 rounded-full bg-emerald-500")} aria-hidden="true" />
+              Administrator
+            </span>
+          </div>
         </div>
-        <dl className={adminTw("grid border-t border-amber-100")}>
-          <div className={adminTw("grid grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)] gap-3 border-b border-amber-100 py-3")}><dt className={adminTw("text-xs font-bold text-amber-900/60")}>Email address</dt><dd className={adminTw("m-0 break-words text-right text-xs font-extrabold")}>doe@example.com</dd></div>
-          <div className={adminTw("grid grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)] gap-3 border-b border-amber-100 py-3")}><dt className={adminTw("text-xs font-bold text-amber-900/60")}>Account role</dt><dd className={adminTw("m-0 break-words text-right text-xs font-extrabold")}>Staff administrator</dd></div>
-          <div className={adminTw("grid grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)] gap-3 border-b border-amber-100 py-3")}><dt className={adminTw("text-xs font-bold text-amber-900/60")}>Access</dt><dd className={adminTw("m-0 break-words text-right text-xs font-extrabold")}>CrumblyX Admin Dashboard</dd></div>
-          <div className={adminTw("grid grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)] gap-3 border-b border-amber-100 py-3")}><dt className={adminTw("text-xs font-bold text-amber-900/60")}>Account status</dt><dd className={adminTw("m-0 flex justify-end text-right text-xs font-extrabold")}><span className={adminTw("staff-profile-active inline-flex items-center gap-1.5 text-green-900")}><i className={adminTw("size-2 rounded-full bg-lime-600")} aria-hidden="true" />Active</span></dd></div>
+        <dl className={adminTw("mt-5 divide-y divide-stone-100 rounded-xl border border-stone-200 px-4")}>
+          <div className={adminTw("grid grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)] gap-3 py-3.5")}><dt className={adminTw("text-sm text-stone-500")}>Account role</dt><dd className={adminTw("m-0 break-words text-right text-sm font-medium text-stone-800")}>Staff administrator</dd></div>
+          <div className={adminTw("grid grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)] gap-3 py-3.5")}><dt className={adminTw("text-sm text-stone-500")}>Access</dt><dd className={adminTw("m-0 break-words text-right text-sm font-medium text-stone-800")}>CrumblyX Admin Dashboard</dd></div>
+          <div className={adminTw("grid grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)] gap-3 py-3.5")}><dt className={adminTw("text-sm text-stone-500")}>Account status</dt><dd className={adminTw("m-0 flex justify-end text-right text-sm font-medium text-emerald-700")}>Active</dd></div>
         </dl>
-        <button className={adminTw("staff-profile-done mt-4 min-h-10 w-full rounded-xl bg-amber-900 text-sm font-extrabold text-white transition hover:bg-amber-950 active:scale-[.99]")} type="button" onClick={onClose}>Done</button>
+        <button className={adminTw("mt-5 min-h-11 w-full rounded-xl bg-stone-900 text-sm font-semibold text-white transition hover:bg-stone-800 active:scale-[.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2")} type="button" onClick={onClose}>Done</button>
       </section>
     </div>
   )
 }
 
-export { DashboardIcon, StaffProfileDialog }
+export { DashboardIcon, StaffProfileDialog, StaffSpinner }

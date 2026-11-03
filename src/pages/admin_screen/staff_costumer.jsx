@@ -1,44 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Logo } from '../../components/customer_ui.jsx'
-import { DashboardIcon, StaffProfileDialog } from './staff_admin_shared.jsx'
+import { DashboardIcon, StaffProfileDialog, StaffSpinner } from './staff_admin_shared.jsx'
+import Sidebar from './staff_sidebar.jsx'
+import StaffMessageInbox from './staff_message_inbox.jsx'
 import { adminTw } from './staff_admin_tw.js'
 import { useStaffProfile } from './staff_profile.js'
-import { STAFF_NAVIGATION } from './staff_navigation.js'
-
-const INITIAL_CUSTOMERS = [
-  'Maria Santos', 'Juan Dela Cruz', 'Jayson Mancol', 'Luis Garcia',
-  'Sofia Cruz', 'Daniel Ramos', 'Ella Navarro', 'Rafael Torres',
-  'Isabella Reyes', 'Miguel Bautista', 'Camila Flores', 'Gabriel Mendoza',
-  'Ava Castillo', 'Ethan Villanueva', 'Mia Aquino', 'Noah Fernandez',
-  'Chloe Rivera', 'Liam Torres', 'Amara Lim', 'Lucas Santiago',
-  'Zoe Mercado', 'Elijah Valdez', 'Nina Gonzales', 'Caleb Ortiz',
-  'Leah Dizon', 'Nathan Soriano', 'Ivy Domingo', 'Adrian Cabrera',
-  'Maya Delos Reyes', 'Joshua Padilla', 'Aria Manalo', 'Theo Velasco',
-  'Luna Pineda', 'Marco Aguilar', 'Grace Natividad', 'Enzo de Leon',
-  'Jade Villarin', 'Paolo Romero', 'Mika Salazar', 'Dylan Gutierrez',
-  'Talia Ramos', 'Andre Francisco', 'Hope Macapagal', 'Rico Estrella',
-  'Faith Ocampo', 'Sean Javier', 'Bea Alonzo', 'Vincent Co',
-].map((name, index) => {
-  const joinedAt = new Date()
-  joinedAt.setDate(joinedAt.getDate() - (index < 10 ? index + 1 : 31 + (index % 250)))
-  const inactiveIndexes = [2, 10, 18, 26, 34, 42]
-  const emailName = name.toLocaleLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/(^\.|\.$)/g, '')
-
-  return {
-    id: `C${String(index + 1).padStart(3, '0')}`,
-    name,
-    email: `${emailName}@example.com`,
-    phone: index === 0 ? '09123456789' : `09${String(10 + (index % 10)).padStart(2, '0')} ${String(234 + index).padStart(3, '0')} ${String(1000 + index)}`,
-    location: index === 0 ? 'Catbalogan City' : index % 2 === 0 ? 'Catbalogan City' : 'Tacloban City',
-    status: inactiveIndexes.includes(index) ? 'inactive' : 'active',
-    joinedAt: joinedAt.toISOString(),
-    recentOrders: [
-      { id: `ORD-${String(120 + index).padStart(3, '0')}`, summary: 'Matcha Cookies, Iced Americano', total: '₱230', date: 'Oct 18, 2026' },
-      { id: `ORD-${String(92 + index).padStart(3, '0')}`, summary: 'Butter Croissant', total: '₱85', date: 'Oct 12, 2026' },
-    ],
-  }
-})
 
 const CUSTOMER_FILTERS = [
   { filter: 'all', label: 'Total Customers', icon: 'customers', tone: 'coffee' },
@@ -46,6 +12,19 @@ const CUSTOMER_FILTERS = [
   { filter: 'active', label: 'Active Customers', icon: 'star', tone: 'amber' },
   { filter: 'inactive', label: 'Inactive Customers', icon: 'userSlash', tone: 'red' },
 ]
+const CUSTOMER_PAGE_SIZE = 10
+
+async function customerRequest(action, method = 'GET', body, signal) {
+  const response = await fetch(`/api/customers/${action}`, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+    signal,
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data.error || 'Customer request failed.')
+  return data
+}
 
 function isNewCustomer(customer) {
   const daysSinceJoined = (Date.now() - new Date(customer.joinedAt).getTime()) / 86400000
@@ -64,6 +43,8 @@ function CustomerDialog({ customer, mode, onClose, onModeChange, onSave, onConfi
   const [location, setLocation] = useState(customer?.location || '')
   const [status, setStatus] = useState(customer?.status || 'active')
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
   const dialogRef = useRef(null)
   const closeTimer = useRef(null)
@@ -71,28 +52,19 @@ function CustomerDialog({ customer, mode, onClose, onModeChange, onSave, onConfi
   const isDetailsEdit = mode === 'details-edit'
   const isDetails = mode === 'details'
   const isDeleting = mode === 'delete-confirm' || mode === 'details-delete-confirm'
+  const isBusy = saving || deleting
 
   useEffect(() => () => window.clearTimeout(closeTimer.current), [])
 
   const closeDialog = useCallback(() => {
-    if (isClosing) return
+    if (isClosing || isBusy) return
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       onClose()
       return
     }
     setIsClosing(true)
     closeTimer.current = window.setTimeout(onClose, 180)
-  }, [isClosing, onClose])
-
-  const confirmDelete = useCallback(() => {
-    if (isClosing) return
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      onConfirmDelete()
-      return
-    }
-    setIsClosing(true)
-    closeTimer.current = window.setTimeout(onConfirmDelete, 180)
-  }, [isClosing, onConfirmDelete])
+  }, [isBusy, isClosing, onClose])
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -118,7 +90,7 @@ function CustomerDialog({ customer, mode, onClose, onModeChange, onSave, onConfi
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [closeDialog])
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault()
     const normalizedName = name.trim()
     const normalizedEmail = email.trim().toLocaleLowerCase()
@@ -139,16 +111,35 @@ function CustomerDialog({ customer, mode, onClose, onModeChange, onSave, onConfi
       setError('Enter a customer location.')
       return
     }
-    const saveError = onSave({ ...customer, name: normalizedName, email: normalizedEmail, phone: normalizedPhone, location: location.trim(), status })
-    if (saveError) setError(saveError)
+    setSaving(true)
+    try {
+      const saveError = await onSave({ ...customer, name: normalizedName, email: normalizedEmail, phone: normalizedPhone, location: location.trim(), status })
+      if (saveError) setError(saveError)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function confirmDelete() {
+    if (deleting) return
+    setDeleting(true)
+    try {
+      const deleteError = await onConfirmDelete()
+      if (deleteError) setError(deleteError)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
     <div className={adminTw(`staff-customer-modal-backdrop ${isClosing ? 'is-closing' : ''}`)} onMouseDown={(event) => { if (event.target === event.currentTarget) closeDialog() }}>
-      <section ref={dialogRef} className={adminTw(`staff-customer-modal max-h-[90dvh] overflow-y-auto rounded-2xl border border-amber-100 bg-white p-6 shadow-2xl ${mode.startsWith('details') ? 'customer-details-modal' : ''} ${isClosing ? 'is-closing' : ''}`)} role="dialog" aria-modal="true" aria-labelledby="staff-customer-dialog-title">
+      <section ref={dialogRef} className={adminTw(`staff-customer-modal max-h-[90dvh] overflow-y-auto ${isDetails ? 'sm:max-w-[520px]' : ''} ${isClosing ? 'is-closing' : ''}`)} role="dialog" aria-modal="true" aria-labelledby="staff-customer-dialog-title">
         <header>
-          <h2 id="staff-customer-dialog-title">{isDetails ? 'Customer Details' : isDeleting ? 'Delete customer?' : isEditing ? customer?.id ? 'Update Details' : 'Add customer' : 'Edit customer'}</h2>
-          <button type="button" className={adminTw("staff-customer-modal-close")} aria-label="Close customer details" onClick={closeDialog}><DashboardIcon name="close" /></button>
+          <div>
+            {isDetails && <p className={adminTw("mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-amber-700")}>Customer profile</p>}
+            <h2 id="staff-customer-dialog-title" className={adminTw("text-xl font-bold tracking-tight text-stone-900")}>{isDetails ? 'Customer details' : isDeleting ? 'Delete customer?' : isEditing ? customer?.id ? 'Update details' : 'Add customer' : 'Edit customer'}</h2>
+          </div>
+          <button type="button" className={adminTw("staff-customer-modal-close")} aria-label="Close customer details" onClick={closeDialog} disabled={isBusy}><DashboardIcon name="close" /></button>
         </header>
 
         {isDetails && (
@@ -160,37 +151,23 @@ function CustomerDialog({ customer, mode, onClose, onModeChange, onSave, onConfi
               <div><h3>{customer.name}</h3><p>{customer.email}</p></div>
             </div>
             <dl className={adminTw("staff-customer-details-list")}>
-              <div><dt>Contact No.</dt><dd>{customer.phone}</dd></div>
-              <div><dt>Location</dt><dd>{customer.location || 'Not provided'}</dd></div>
+              {/* <div><dt>Contact number</dt><dd>{customer.phone || 'Not provided'}</dd></div>
+              <div><dt>Location</dt><dd>{customer.location || 'Not provided'}</dd></div> */}
+              <div><dt>Account status</dt><dd><CustomerStatus status={customer.status} /></dd></div>
             </dl>
             <div className={adminTw("staff-customer-detail-actions")}>
-              <button className={adminTw("staff-customer-update-button")} type="button" onClick={() => onModeChange('details-edit')}><DashboardIcon name="edit" size={16} />Update Details</button>
-              <button className={adminTw("staff-customer-delete-button")} type="button" onClick={() => onModeChange('delete-confirm')}><DashboardIcon name="trash" size={16} />Delete Customer</button>
+              <button className={adminTw("staff-customer-delete-button")} type="button" onClick={() => onModeChange('details-delete-confirm')}><DashboardIcon name="trash" size={16} />Delete Customer</button>
             </div>
           </div>
         )}
 
-        {isEditing && (
-          <form onSubmit={submit}>
-            <label>Full name<input autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} maxLength={100} /></label>
-            <label>Email address<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} maxLength={254} /></label>
-            <label>Phone number<input type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} maxLength={15} placeholder="0917 123 4567" /></label>
-            <label>Location<input autoComplete="address-level2" value={location} onChange={(event) => setLocation(event.target.value)} maxLength={120} placeholder="City or municipality" /></label>
-            <label className={adminTw("staff-customer-switch-label")}>Customer status
-              <span className={adminTw("staff-customer-switch-copy")}><span>{status === 'active' ? 'Active' : 'Inactive'}</span><input type="checkbox" role="switch" checked={status === 'active'} onChange={(event) => setStatus(event.target.checked ? 'active' : 'inactive')} /><i aria-hidden="true" /></span>
-            </label>
-            {error && <p className={adminTw("staff-customer-form-error")} role="alert">{error}</p>}
-            <div className={adminTw("staff-customer-form-actions")}>
-              <button className={adminTw("staff-customer-secondary")} type="button" onClick={() => isDetailsEdit ? onModeChange('details') : closeDialog()}>Cancel</button>
-              <button className={adminTw("staff-customer-primary")} type="submit">{customer.id ? 'Save changes' : 'Add customer'}</button>
-            </div>
-          </form>
-        )}
+
 
         {isDeleting && (
           <div className={adminTw("staff-customer-delete-confirm")}>
             <p>Delete <strong>{customer.name}</strong>? This can’t be undone.</p>
-            <div><button className={adminTw("staff-customer-secondary")} type="button" onClick={() => mode === 'details-delete-confirm' ? onModeChange('details') : closeDialog()}>Cancel</button><button className={adminTw("staff-customer-danger")} type="button" onClick={confirmDelete}>Delete customer</button></div>
+          {error && <p className={adminTw("staff-customer-form-error")} role="alert">{error}</p>}
+          <div><button className={adminTw("staff-customer-secondary")} type="button" onClick={() => mode === 'details-delete-confirm' ? onModeChange('details') : closeDialog()} disabled={deleting}>Cancel</button><button className={adminTw("staff-customer-danger")} type="button" onClick={confirmDelete} disabled={deleting} aria-busy={deleting}>{deleting && <StaffSpinner />}{deleting ? 'Deleting…' : 'Delete customer'}</button></div>
           </div>
         )}
       </section>
@@ -209,21 +186,41 @@ function SummaryCard({ label, value, icon, tone, selected, onClick }) {
 }
 
 export default function StaffCustomers() {
-  const [customers, setCustomers] = useState(INITIAL_CUSTOMERS)
+  const [customers, setCustomers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [refreshKey, setRefreshKey] = useState(0)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all')
   const [sort, setSort] = useState({ key: 'id', direction: 'asc' })
   const [dialog, setDialog] = useState(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [chatOpen, setChatOpen] = useState(false)
   const { profileOpen, openProfile, closeProfile } = useStaffProfile()
   const [toast, setToast] = useState(null)
+  const [page, setPage] = useState(1)
   const toastTimer = useRef(null)
-  const deletedCustomer = useRef(null)
   const dialogTrigger = useRef(null)
-  const nextCustomerId = useRef(INITIAL_CUSTOMERS.length + 1)
   const navigate = useNavigate()
   const closeDialog = useCallback(() => setDialog(null), [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    customerRequest('list', 'GET', undefined, controller.signal)
+      .then((data) => {
+        if (!Array.isArray(data)) throw new Error('Invalid customers response.')
+        if (!controller.signal.aborted) {
+          setCustomers(data)
+          setLoadError('')
+        }
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) setLoadError(error.message)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+    return () => controller.abort()
+  }, [refreshKey])
 
   const counts = useMemo(() => customers.reduce((result, customer) => {
     result.total += 1
@@ -236,12 +233,20 @@ export default function StaffCustomers() {
     const normalizedQuery = query.trim().toLocaleLowerCase()
     return customers
       .filter((customer) => filter === 'all' || (filter === 'new' ? isNewCustomer(customer) : customer.status === filter))
-      .filter((customer) => !normalizedQuery || `${customer.id} ${customer.name} ${customer.email} ${customer.phone}`.toLocaleLowerCase().includes(normalizedQuery))
+      .filter((customer) => !normalizedQuery || `${customer.id} ${customer.name} ${customer.email} ${customer.phone} ${customer.location || ''}`.toLocaleLowerCase().includes(normalizedQuery))
       .sort((first, second) => {
         const comparison = String(first[sort.key]).localeCompare(String(second[sort.key]), undefined, { numeric: true, sensitivity: 'base' })
         return sort.direction === 'asc' ? comparison : -comparison
       })
   }, [customers, filter, query, sort])
+  const pageCount = Math.max(1, Math.ceil(visibleCustomers.length / CUSTOMER_PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+  const pageCustomers = visibleCustomers.slice(
+    (currentPage - 1) * CUSTOMER_PAGE_SIZE,
+    currentPage * CUSTOMER_PAGE_SIZE,
+  )
+  const firstEntry = visibleCustomers.length === 0 ? 0 : (currentPage - 1) * CUSTOMER_PAGE_SIZE + 1
+  const lastEntry = Math.min(currentPage * CUSTOMER_PAGE_SIZE, visibleCustomers.length)
 
   useEffect(() => () => window.clearTimeout(toastTimer.current), [])
   useEffect(() => {
@@ -251,14 +256,10 @@ export default function StaffCustomers() {
     }
   }, [dialog])
 
-  function showToast(message, deleted = null) {
+  function showToast(message) {
     window.clearTimeout(toastTimer.current)
-    deletedCustomer.current = deleted
-    setToast({ message, canUndo: Boolean(deleted) })
-    toastTimer.current = window.setTimeout(() => {
-      setToast(null)
-      deletedCustomer.current = null
-    }, 4500)
+    setToast({ message })
+    toastTimer.current = window.setTimeout(() => setToast(null), 3500)
   }
 
   function openDialog(mode, customer, event) {
@@ -266,50 +267,44 @@ export default function StaffCustomers() {
     setDialog({ mode, customer })
   }
 
-  function handleSave(customer) {
-    const duplicateEmail = customers.find((item) => item.email === customer.email && item.id !== customer.id)
-    if (duplicateEmail) {
-      return 'That email address is already assigned to another customer.'
-    }
+  async function handleSave(customer) {
     const existing = customers.some((item) => item.id === customer.id)
-    const savedCustomer = existing
-      ? customer
-      : { ...customer, id: `C${String(nextCustomerId.current++).padStart(3, '0')}`, joinedAt: new Date().toISOString(), recentOrders: [] }
-    setCustomers((current) => existing
-      ? current.map((item) => item.id === customer.id ? savedCustomer : item)
-      : [...current, savedCustomer])
-    showToast(existing ? `${customer.name} updated` : `${customer.name} added`)
-    setDialog((current) => current?.mode === 'details-edit'
-      ? { mode: 'details', customer: savedCustomer }
-      : null)
-    return null
+    try {
+      const savedCustomer = await customerRequest(
+        existing ? 'update' : 'create',
+        existing ? 'PUT' : 'POST',
+        customer,
+      )
+      setCustomers((current) => existing
+        ? current.map((item) => item.id === savedCustomer.id ? savedCustomer : item)
+        : [savedCustomer, ...current])
+      if (!existing) setPage(1)
+      showToast(existing ? `${savedCustomer.name} updated` : `${savedCustomer.name} added`)
+      setDialog((current) => current?.mode === 'details-edit'
+        ? { mode: 'details', customer: savedCustomer }
+        : null)
+      return null
+    } catch (error) {
+      return error.message
+    }
   }
 
-  function confirmDelete() {
-    const index = customers.findIndex((item) => item.id === dialog.customer.id)
-    const removed = { customer: dialog.customer, index }
-    setCustomers((current) => current.filter((item) => item.id !== dialog.customer.id))
-    setDialog(null)
-    showToast(`${dialog.customer.name} deleted`, removed)
-  }
-
-  function undoDelete() {
-    const removed = deletedCustomer.current
-    if (!removed) return
-    setCustomers((current) => {
-      if (current.some((item) => item.id === removed.customer.id)) return current
-      const restored = [...current]
-      restored.splice(Math.min(removed.index, restored.length), 0, removed.customer)
-      return restored
-    })
-    window.clearTimeout(toastTimer.current)
-    deletedCustomer.current = null
-    setToast({ message: `${removed.customer.name} restored`, canUndo: false })
-    toastTimer.current = window.setTimeout(() => setToast(null), 2500)
+  async function confirmDelete() {
+    if (!dialog?.customer) return 'Select a customer to delete.'
+    try {
+      await customerRequest(`delete?id=${encodeURIComponent(dialog.customer.id)}`, 'DELETE')
+      setCustomers((current) => current.filter((item) => item.id !== dialog.customer.id))
+      setDialog(null)
+      showToast(`${dialog.customer.name} deleted`)
+      return null
+    } catch (error) {
+      return error.message
+    }
   }
 
   function sortBy(key) {
     setSort((current) => ({ key, direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc' }))
+    setPage(1)
   }
 
   function sortLabel(label, key) {
@@ -323,25 +318,21 @@ export default function StaffCustomers() {
 
   function navigateSection(name) {
     setDrawerOpen(false)
-    const routes = { Dashboard: '/staff/dashboard', Orders: '/staff/orders', Menu: '/staff/menu', Stocks: '/staff/stocks' }
+    const routes = { Dashboard: '/staff/dashboard', Orders: '/staff/orders', Sales: '/staff/sales', Menu: '/staff/menu', Stocks: '/staff/stocks' }
     if (routes[name]) navigate(routes[name])
   }
 
   return (
     <div className={adminTw("admin-dashboard staff-customer-app")}>
-      <button className={adminTw(`admin-drawer-scrim ${drawerOpen ? 'visible' : ''}`)} type="button" aria-label="Close navigation menu" onClick={() => setDrawerOpen(false)} />
-      <aside className={adminTw(`admin-sidebar ${drawerOpen ? 'drawer-open' : ''}`)} aria-label="Staff navigation">
-        <div className={adminTw("admin-brand")}><Logo small /><span>CrumblyX</span><button type="button" className={adminTw("admin-drawer-close")} aria-label="Close menu" onClick={() => setDrawerOpen(false)}><DashboardIcon name="close" /></button></div>
-        <div className={adminTw("admin-side-divider")} />
-        <nav className={adminTw("admin-nav")} aria-label="Main navigation">
-          {STAFF_NAVIGATION.map((item) => (
-            <button type="button" key={item.name} className={adminTw(`admin-nav-item ${item.name === 'Customers' ? 'active' : ''}`)} aria-current={item.name === 'Customers' ? 'page' : undefined} onClick={() => navigateSection(item.name)}>
-              <DashboardIcon name={item.icon} /><span>{item.name}</span>
-            </button>
-          ))}
-        </nav>
-        <div className={adminTw("admin-account")}><div className={adminTw("admin-side-divider")} /><div className={adminTw("admin-user")}><button type="button" className={adminTw("admin-avatar admin-avatar-trigger")} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button><span className={adminTw("admin-user-copy")}><strong>John Doe</strong><small>doe@example.com</small></span><button type="button" className={adminTw("admin-logout")} aria-label="Log out" title="Log out" onClick={logout}><DashboardIcon name="logout" size={18} /></button></div></div>
-      </aside>
+      <Sidebar
+        activeRoute="Customers"
+        drawerOpen={drawerOpen}
+        onNavigate={navigateSection}
+        onClose={() => setDrawerOpen(false)}
+        profileOpen={profileOpen}
+        onOpenProfile={openProfile}
+        onLogout={logout}
+      />
 
       <main className={adminTw("admin-main staff-customer-main")}>
         <header className={adminTw("admin-topbar")}>
@@ -350,10 +341,7 @@ export default function StaffCustomers() {
             <DashboardIcon name="customers" size={24} /><h1>Customers</h1>
           </div>
           <div className={adminTw("admin-top-actions")}>
-            <div className={adminTw("admin-chat-wrap")}>
-              <button type="button" className={adminTw("admin-chat-button")} aria-label="Customer Chat, 2 unread messages" aria-expanded={chatOpen} onClick={() => setChatOpen((open) => !open)}><DashboardIcon name="chat" size={18} /><span>Customer Chat</span><b aria-hidden="true">2</b></button>
-              {chatOpen && <div className={adminTw("admin-chat-popover")} role="dialog" aria-label="Customer chat preview"><header><strong>Customer Chat</strong><button type="button" aria-label="Close chats" onClick={() => setChatOpen(false)}><DashboardIcon name="close" size={17} /></button></header><p className={adminTw("staff-customer-chat-note")}>2 unread customer messages</p></div>}
-            </div>
+            <StaffMessageInbox />
             <button type="button" className={adminTw("admin-avatar top-avatar admin-avatar-trigger")} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
           </div>
         </header>
@@ -363,53 +351,89 @@ export default function StaffCustomers() {
             <label className={adminTw("staff-customer-search")}>
               <DashboardIcon name="search" size={19} />
               <span className={adminTw("visually-hidden")}>Search customers by ID, name, email, or phone</span>
-              <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Customer..." />
-              {query && <button type="button" aria-label="Clear search" onClick={() => setQuery('')}><DashboardIcon name="close" size={15} /></button>}
+              <input type="search" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1) }} placeholder="Search Customer..." />
+              {query && <button type="button" aria-label="Clear search" onClick={() => { setQuery(''); setPage(1) }}><DashboardIcon name="close" size={15} /></button>}
             </label>
-            <button type="button" className={adminTw("staff-customer-add-button")} onClick={(event) => openDialog('edit', { id: '', name: '', email: '', phone: '', location: '', status: 'active', joinedAt: new Date().toISOString(), recentOrders: [] }, event)}><DashboardIcon name="plus" size={16} />Add Customer</button>
+            <button type="button" className={adminTw("staff-customer-add-button")} onClick={(event) => openDialog('edit', { id: '', name: '', email: '', phone: '', location: '', status: 'active', joinedAt: new Date().toISOString() }, event)}><DashboardIcon name="plus" size={16} />Add Customer</button>
           </section>
+          {loadError && <div className={adminTw("mx-4 mt-4 flex shrink-0 items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 sm:mx-7 lg:mx-9")} role="alert"><span>Could not load customers: {loadError}</span><button type="button" className={adminTw("inline-flex shrink-0 items-center gap-2 font-semibold underline")} onClick={() => { setLoading(true); setLoadError(''); setRefreshKey((key) => key + 1) }} disabled={loading} aria-busy={loading}>{loading && <StaffSpinner className="size-3" />}Try again</button></div>}
 
           <section className={adminTw("staff-customer-dashboard-content")} aria-label="Customer overview">
             <div className={adminTw("staff-customer-summary-grid")} aria-live="polite">
               {CUSTOMER_FILTERS.map((card) => (
-                <SummaryCard key={card.filter} {...card} value={counts[card.filter === 'all' ? 'total' : card.filter]} selected={filter === card.filter} onClick={() => setFilter((current) => card.filter === 'all' || current === card.filter ? 'all' : card.filter)} />
+                <SummaryCard key={card.filter} {...card} value={counts[card.filter === 'all' ? 'total' : card.filter]} selected={filter === card.filter} onClick={() => { setFilter((current) => card.filter === 'all' || current === card.filter ? 'all' : card.filter); setPage(1) }} />
               ))}
             </div>
 
             <section className={adminTw("staff-customer-table-section")} aria-labelledby="staff-customer-table-title">
               <div className={adminTw("staff-customer-table-heading")}>
                 <h2 id="staff-customer-table-title" tabIndex="-1">Customer Directory</h2>
-                <span>{visibleCustomers.length} {visibleCustomers.length === 1 ? 'customer' : 'customers'}</span>
+                <span>{loading ? 'Loading…' : `${visibleCustomers.length} ${visibleCustomers.length === 1 ? 'customer' : 'customers'}`}</span>
               </div>
-              <div className={adminTw("staff-customer-table-wrap overflow-x-auto rounded-2xl border border-amber-100 bg-white shadow-sm")}>
-                <table className={adminTw("staff-customer-table")}>
+              <div className={adminTw("staff-customer-table-card flex min-h-0 flex-1 flex-col rounded-2xl border border-stone-200 bg-white shadow-sm")}>
+                <div className={adminTw("shrink-0 overflow-x-auto")}>
+                <table className={adminTw("staff-customer-table w-full min-w-[900px] border-separate border-spacing-0 text-left")}>
                   <caption className={adminTw("visually-hidden")}>CrumblyX customer directory and account actions</caption>
                   <thead><tr>
                     <th scope="col">{sortLabel('ID', 'id')}</th>
                     <th scope="col">{sortLabel('NAME', 'name')}</th>
                     <th scope="col">{sortLabel('EMAIL', 'email')}</th>
-                    <th scope="col">{sortLabel('PHONE', 'phone')}</th>
+                    {/* <th scope="col">{sortLabel('PHONE', 'phone')}</th> */}
                     <th scope="col">{sortLabel('STATUS', 'status')}</th>
                     <th scope="col"><span className={adminTw("staff-customer-actions-heading")}>ACTIONS</span></th>
                   </tr></thead>
                   <tbody>
-                    {visibleCustomers.map((customer) => (
-                      <tr key={customer.id}>
+                    {loading && Array.from({ length: 5 }, (_, index) => (
+                      <tr key={`loading-${index}`} aria-hidden="true">
+                        <td colSpan="5"><span className={adminTw("block h-10 animate-pulse rounded-lg bg-stone-100")} /></td>
+                      </tr>
+                    ))}
+                    {!loading && pageCustomers.map((customer) => (
+                      <tr
+                        key={customer.id}
+                        tabIndex={0}
+                        aria-label={`View details for ${customer.name}`}
+                        onClick={(event) => openDialog('details', customer, event)}
+                        onKeyDown={(event) => {
+                          if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+                            event.preventDefault()
+                            openDialog('details', customer, event)
+                          }
+                        }}
+                      >
                         <td data-label="ID">{customer.id}</td>
                         <th scope="row" data-label="Name">{customer.name}</th>
                         <td data-label="Email">{customer.email}</td>
-                        <td className={adminTw("staff-customer-phone")} data-label="Phone">{customer.phone}</td>
+                        {/* <td className={adminTw("staff-customer-phone")} data-label="Phone">{customer.phone}</td> */}
                         <td data-label="Status"><CustomerStatus status={customer.status} /></td>
                         <td data-label="Actions"><div className={adminTw("staff-customer-row-actions")}>
-                          <button type="button" aria-label={`View ${customer.name}`} title={`View ${customer.name}`} onClick={(event) => openDialog('details', customer, event)}><DashboardIcon name="eye" size={15} /></button>
-                          <button type="button" aria-label={`Edit ${customer.name}`} title={`Edit ${customer.name}`} onClick={(event) => openDialog('edit', customer, event)}><DashboardIcon name="edit" size={15} /></button>
-                          <button type="button" aria-label={`Delete ${customer.name}`} title={`Delete ${customer.name}`} onClick={(event) => openDialog('delete-confirm', customer, event)}><DashboardIcon name="trash" size={15} /></button>
+                          {/* <button type="button" aria-label={`Edit ${customer.name}`} title={`Edit ${customer.name}`} onClick={(event) => { event.stopPropagation(); openDialog('edit', customer, event) }}><DashboardIcon name="edit" size={16} /></button> */}
+                          <button type="button" aria-label={`Delete ${customer.name}`} title={`Delete ${customer.name}`} onClick={(event) => { event.stopPropagation(); openDialog('delete-confirm', customer, event) }}><DashboardIcon name="trash" size={16} /></button>
                         </div></td>
                       </tr>
                     ))}
-                    {visibleCustomers.length === 0 && <tr className={adminTw("staff-customer-empty-row")}><td colSpan="6"><span><DashboardIcon name="search" size={20} /></span><strong>No customers found</strong><small>Try a different search or filter.</small></td></tr>}
+                    {!loading && visibleCustomers.length === 0 && <tr className={adminTw("staff-customer-empty-row")}><td colSpan="6"><span><DashboardIcon name={loadError ? 'alertCircle' : 'search'} size={20} /></span><strong>{loadError ? 'Customer data unavailable' : customers.length ? 'No customers found' : 'No customers yet'}</strong><small>{loadError ? 'Retry the request above to load the customer directory.' : customers.length ? 'Try a different search or filter.' : 'Customer accounts will appear here when they register.'}</small></td></tr>}
                   </tbody>
                 </table>
+                </div>
+                <footer className={adminTw("staff-customer-pagination mt-auto flex flex-col gap-3 border-t border-stone-200 bg-white px-4 py-3 text-xs text-stone-500 sm:flex-row sm:items-center sm:justify-between")}>
+                  <span aria-live="polite">Showing {loading ? '—' : firstEntry}–{loading ? '—' : lastEntry} of {loading ? '—' : visibleCustomers.length} entries</span>
+                  <nav className={adminTw("flex items-center justify-end gap-2")} aria-label="Customer table pages">
+                    <button
+                      type="button"
+                      className={adminTw("rounded-lg border border-stone-200 px-3 py-2 font-semibold text-stone-700 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-40")}
+                      onClick={() => setPage(Math.max(1, currentPage - 1))}
+                      disabled={loading || currentPage <= 1}
+                    >Previous</button>
+                    <span className={adminTw("min-w-16 text-center font-medium text-stone-600")}>Page {loading ? '—' : currentPage} of {loading ? '—' : pageCount}</span>
+                    <button
+                      type="button"
+                      className={adminTw("rounded-lg border border-stone-200 px-3 py-2 font-semibold text-stone-700 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-40")}
+                      onClick={() => setPage(Math.min(pageCount, currentPage + 1))}
+                      disabled={loading || currentPage >= pageCount}
+                    >Next</button>
+                  </nav>
+                </footer>
               </div>
             </section>
           </section>
@@ -417,7 +441,7 @@ export default function StaffCustomers() {
       </main>
 
       {dialog && <CustomerDialog key={`${dialog.mode}-${dialog.customer.id}`} customer={dialog.customer} mode={dialog.mode} onClose={closeDialog} onModeChange={(mode) => setDialog((current) => current ? { ...current, mode } : current)} onSave={handleSave} onConfirmDelete={confirmDelete} />}
-      {toast && <div className={adminTw("staff-customer-toast")} role="status"><span>{toast.message}</span>{toast.canUndo && <button type="button" onClick={undoDelete}>Undo</button>}</div>}
+      {toast && <div className={adminTw("staff-customer-toast")} role="status"><span>{toast.message}</span></div>}
       {profileOpen && <StaffProfileDialog onClose={closeProfile} />}
     </div>
   )

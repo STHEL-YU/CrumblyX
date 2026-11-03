@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Icon, Logo } from '../../../components/customer_ui.jsx'
+import { StaffSpinner } from '../staff_admin_shared.jsx'
 import { adminTw } from '../staff_admin_tw.js'
 
 export default function StaffLogin({ onSubmit, onForgotPassword, onSignUp, onSocialLogin }) {
@@ -11,6 +12,7 @@ export default function StaffLogin({ onSubmit, onForgotPassword, onSignUp, onSoc
   const [formError, setFormError] = useState('')
   const [notice, setNotice] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [optionalAction, setOptionalAction] = useState('')
 
   async function submit(event) {
     event.preventDefault()
@@ -43,17 +45,20 @@ export default function StaffLogin({ onSubmit, onForgotPassword, onSignUp, onSoc
     }
   }
 
-  async function runOptionalAction(action, fallbackMessage) {
+  async function runOptionalAction(key, action, fallbackMessage) {
     setNotice('')
     setFormError('')
     if (!action) {
       setNotice(fallbackMessage)
       return
     }
+    setOptionalAction(key)
     try {
       await action()
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'This action could not be completed.')
+    } finally {
+      setOptionalAction('')
     }
   }
 
@@ -128,7 +133,7 @@ export default function StaffLogin({ onSubmit, onForgotPassword, onSignUp, onSoc
 
             {formError && <p className={adminTw("staff-login-error")} role="alert">{formError}</p>}
 
-            <button className={adminTw("staff-login-submit")} type="submit" disabled={isSubmitting}>
+            <button className={adminTw("staff-login-submit")} type="submit" disabled={isSubmitting} aria-busy={isSubmitting}>
               {isSubmitting ? <><span className={adminTw("staff-login-spinner")} aria-hidden="true" /> Signing in…</> : 'Sign In'}
             </button>
           </form>
@@ -138,15 +143,15 @@ export default function StaffLogin({ onSubmit, onForgotPassword, onSignUp, onSoc
               <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />
               <span>Remember Me</span>
             </label>
-            <button type="button" className={adminTw("staff-login-link")} onClick={() => runOptionalAction(onForgotPassword, 'Password reset is not available yet. Contact your administrator.')}>
-              Forgot password?
+            <button type="button" className={adminTw("staff-login-link")} disabled={Boolean(optionalAction)} onClick={() => runOptionalAction('forgot', onForgotPassword, 'Password reset is not available yet. Contact your administrator.')}>
+              {optionalAction === 'forgot' && <StaffSpinner className="mr-1 size-3" />}Forgot password?
             </button>
           </div>
 
           <p className={adminTw("staff-login-signup")}>
             Don&apos;t have an account?{' '}
-            <button type="button" className={adminTw("staff-login-link staff-login-signup-link")} onClick={() => runOptionalAction(onSignUp, 'Staff account registration is managed by your administrator.')}>
-              Sign up
+            <button type="button" className={adminTw("staff-login-link staff-login-signup-link")} disabled={Boolean(optionalAction)} onClick={() => runOptionalAction('signup', onSignUp, 'Staff account registration is managed by your administrator.')}>
+              {optionalAction === 'signup' && <StaffSpinner className="mr-1 size-3" />}Sign up
             </button>
           </p>
 
@@ -156,13 +161,15 @@ export default function StaffLogin({ onSubmit, onForgotPassword, onSignUp, onSoc
               <button
                 type="button"
                 aria-label={`Sign in with ${provider}`}
+                disabled={Boolean(optionalAction)}
                 key={provider}
                 onClick={() => runOptionalAction(
+                  provider,
                   onSocialLogin ? () => onSocialLogin(provider) : undefined,
                   `${provider[0].toUpperCase()}${provider.slice(1)} sign-in is not available yet.`,
                 )}
               >
-                <Icon name={provider} size={20} />
+                {optionalAction === provider ? <StaffSpinner /> : <Icon name={provider} size={20} />}
               </button>
             ))}
           </div>

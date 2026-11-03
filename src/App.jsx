@@ -15,6 +15,7 @@ import StaffOrders from './pages/admin_screen/staff_order.jsx'
 import StaffMenu from './pages/admin_screen/staff_menu.jsx'
 import StaffStock from './pages/admin_screen/staff_stock.jsx'
 import StaffCustomers from './pages/admin_screen/staff_costumer.jsx'
+import StaffSales from './pages/admin_screen/staff_sales.jsx'
 
 export default function AppLayout() {
   const location = useLocation()
@@ -34,6 +35,7 @@ export default function AppLayout() {
         <Route path="/staff/login" element={<StaffLogin />} />
         <Route path="/staff/dashboard" element={<StaffDashboard />} />
         <Route path="/staff/orders" element={<StaffOrders />} />
+        <Route path="/staff/sales" element={<StaffSales />} />
         <Route path="/staff/menu" element={<StaffMenu />} />
         <Route path="/staff/stocks" element={<StaffStock />} />
         <Route path="/staff/customers" element={<StaffCustomers />} />
@@ -81,6 +83,11 @@ export default function AppLayout() {
             <CustomerOnly>
               <CustomerAuthScene>
                 <CosOrderType
+                  customer={{
+                    id: sessionStorage.getItem('crumblyx-customer-id') || '',
+                    name: sessionStorage.getItem('crumblyx-customer-name') || '',
+                    email: sessionStorage.getItem('crumblyx-customer-email') || '',
+                  }}
                   onDineIn={() => navigate('/scan-table')}
                   onTakeout={() => navigate('/home?mode=takeout')}
                 />

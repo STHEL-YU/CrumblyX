@@ -90,6 +90,13 @@ export default function CustomerNotifications({ customerId, orders, ordersLoaded
         const previousStatus = previousStatuses.get(order.id)
         if (!previousStatus || previousStatus === order.status) continue
         const statusLabel = ORDER_STATUS_LABELS[order.status] || 'updated'
+        if (order.status === 'completed') {
+          window.setTimeout(() => {
+            if (typeof navigator.vibrate === 'function') {
+              navigator.vibrate([250, 120, 250])
+            }
+          }, 3000)
+        }
         updates.push({
           id: `order:${order.id}:${order.status}`,
           title: `Order ${statusLabel.toLowerCase()}`,
