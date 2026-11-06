@@ -110,7 +110,11 @@ export default function AppLayout() {
             <CustomerOnly>
               <CustomerAuthScene>
                 <CosTableScanner
-                  onTableFound={(tableNumber) => navigate(`/home?mode=dine-in&table=${encodeURIComponent(tableNumber)}`)}
+                  onTableFound={(destination) => navigate(
+                    destination.type === 'booking'
+                      ? `/book-table?id=${encodeURIComponent(destination.id)}`
+                      : `/home?mode=dine-in&table=${encodeURIComponent(destination.tableName)}`,
+                  )}
                   onBack={() => navigate('/order-type')}
                 />
               </CustomerAuthScene>

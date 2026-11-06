@@ -1,32 +1,43 @@
 import { useEffect, useRef, useState } from 'react'
+import jsQR from 'jsqr'
 import { Icon, Logo } from '../../components/customer_ui.jsx'
 
-function getTableNumber(value) {
+function getTableDestination(value) {
   const qrValue = value.trim()
-  if (!qrValue) return ''
+  if (!qrValue) return null
 
   try {
     const url = new URL(qrValue)
+    if (url.pathname === '/book-table') {
+      const id = url.searchParams.get('id')
+      if (id) return { type: 'booking', id }
+    }
+
     const table = url.searchParams.get('table')
       || url.searchParams.get('tableNumber')
       || url.searchParams.get('table_number')
-    if (table) return table.trim()
+    if (table) return { type: 'table', tableName: table.trim() }
 
     const pathMatch = url.pathname.match(/\/table\/([a-z0-9-]+)\/?$/i)
-    if (pathMatch) return pathMatch[1]
+    if (pathMatch) return { type: 'table', tableName: pathMatch[1] }
   } catch {
-
   }
 
-  const match = qrValue.match(/^(?:table\s*)?(?:#|:|-)?\s*([a-z0-9-]{1,12})$/i)
-  return match?.[1] || ''
+  const match = qrValue.match(/^(?:table\s*)?(?:#|:|-)?\s*([a-z0-9 -]{1,50})$/i)
+  return match?.[1] ? { type: 'table', tableName: match[1].trim() } : null
 }
 
 export default function CosTableScanner({ onTableFound, onBack }) {
   const videoRef = useRef(null)
+  const canvasRef = useRef(null)
+  const onTableFoundRef = useRef(onTableFound)
   const [isScanning, setIsScanning] = useState(false)
   const [tableInput, setTableInput] = useState('')
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    onTableFoundRef.current = onTableFound
+  }, [onTableFound])
 
   useEffect(() => {
     if (!isScanning) return undefined
@@ -35,22 +46,17 @@ export default function CosTableScanner({ onTableFound, onBack }) {
     let active = true
     let stream
     let frameId
+    const detector = 'BarcodeDetector' in window
+      ? new window.BarcodeDetector({ formats: ['qr_code'] })
+      : null
 
     async function startScanner() {
-      if (!('BarcodeDetector' in window)) {
-        setError('QR scanning is not supported in this browser. Enter the table number from the QR code instead.')
-        setIsScanning(false)
-        return
-      }
-
       if (!navigator.mediaDevices?.getUserMedia) {
         setError('Camera access is unavailable. Open this page over HTTPS or enter the table number manually.')
         setIsScanning(false)
         return
       }
-
       try {
-        const detector = new window.BarcodeDetector({ formats: ['qr_code'] })
         stream = await navigator.mediaDevices.getUserMedia({
           audio: false,
           video: { facingMode: { ideal: 'environment' } },
@@ -70,11 +76,25 @@ export default function CosTableScanner({ onTableFound, onBack }) {
           if (!active) return
           if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
             try {
-              const barcodes = await detector.detect(video)
-              const decodedTable = barcodes.map((barcode) => getTableNumber(barcode.rawValue)).find(Boolean)
-              if (decodedTable) {
+              let value = ''
+              if (detector) {
+                const barcodes = await detector.detect(video)
+                value = barcodes[0]?.rawValue || ''
+              } else {
+                const canvas = canvasRef.current
+                const context = canvas?.getContext('2d', { willReadFrequently: true })
+                if (canvas && context) {
+                  canvas.width = video.videoWidth
+                  canvas.height = video.videoHeight
+                  context.drawImage(video, 0, 0, canvas.width, canvas.height)
+                  const image = context.getImageData(0, 0, canvas.width, canvas.height)
+                  value = jsQR(image.data, image.width, image.height)?.data || ''
+                }
+              }
+              const destination = getTableDestination(value)
+              if (destination) {
                 active = false
-                onTableFound(decodedTable)
+                onTableFoundRef.current(destination)
                 return
               }
             } catch {
@@ -105,16 +125,16 @@ export default function CosTableScanner({ onTableFound, onBack }) {
       stream?.getTracks().forEach((track) => track.stop())
       if (video) video.srcObject = null
     }
-  }, [isScanning, onTableFound])
+  }, [isScanning])
 
   function submitTable(event) {
     event.preventDefault()
-    const table = getTableNumber(tableInput)
-    if (!table) {
+    const destination = getTableDestination(tableInput)
+    if (!destination) {
       setError('Enter a valid table number or scan the table QR code.')
       return
     }
-    onTableFound(table)
+    onTableFoundRef.current(destination)
   }
 
   return (
@@ -131,6 +151,7 @@ export default function CosTableScanner({ onTableFound, onBack }) {
           {isScanning ? (
             <>
               <video ref={videoRef} className="scanner-video" muted playsInline />
+              <canvas ref={canvasRef} className="hidden" />
               <span className="scanner-frame" aria-hidden="true"><i /></span>
             </>
           ) : (
