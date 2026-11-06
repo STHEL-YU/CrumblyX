@@ -24,6 +24,8 @@ function DashboardIcon({ name, size = 19 }) {
     plus: <><path d="M12 5v14M5 12h14" /></>,
     edit: <><path d="m15 5 4 4M4 20l4-.8L19.2 8a2.1 2.1 0 0 0-3-3L5 16.2 4 20Z" /></>,
     trash: <><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 10v6M14 10v6" /></>,
+    archive: <><path d="M3 4h18v5H3zM5 9v11h14V9M10 13h4M12 9v4" /></>,
+    restore: <><path d="M3 4h18v5H3zM5 9v11h14V9M9 14l3-3 3 3M12 11v6" /></>,
     warning: <><path d="m10.3 4.6-8 14A1.6 1.6 0 0 0 3.7 21h16.6a1.6 1.6 0 0 0 1.4-2.4l-8-14a1.9 1.9 0 0 0-3.4 0Z" /><path d="M12 9v4M12 17h.01" /></>,
     boxOpen: <><path d="m3 8 9-5 9 5-9 5-9-5Z" /><path d="M3 8v9l9 5 9-5V8M12 13v9M7.5 5.5l9 5" /></>,
     checkCircle: <><circle cx="12" cy="12" r="9" /><path d="m8 12 2.5 2.5L16.5 9" /></>,

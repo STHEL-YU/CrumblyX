@@ -48,6 +48,41 @@ export default async function handler(request, response) {
       return json(response, 200, result.rows)
     }
 
+    if (request.method === 'GET' && action === 'get') {
+      const id = request.query.id
+      if (typeof id !== 'string' || !id) {
+        return json(response, 400, { error: 'Table id is required.' })
+      }
+      const result = await query(`
+        SELECT id, table_name AS "tableName", table_type AS "tableType",
+               seats, available, image
+        FROM dining_tables
+        WHERE id = $1
+      `, [id])
+      if (result.rowCount === 0) return json(response, 404, { error: 'Table not found.' })
+      return json(response, 200, result.rows[0])
+    }
+
+    if (request.method === 'POST' && action === 'reserve') {
+      const id = request.body?.id
+      if (typeof id !== 'string' || !id) {
+        return json(response, 400, { error: 'Table id is required.' })
+      }
+      const result = await query(`
+        UPDATE dining_tables
+        SET available = FALSE
+        WHERE id = $1 AND available = TRUE
+        RETURNING id, table_name AS "tableName", table_type AS "tableType",
+                  seats, available, image
+      `, [id])
+      if (result.rowCount === 0) {
+        const existing = await query('SELECT id FROM dining_tables WHERE id = $1', [id])
+        if (existing.rowCount === 0) return json(response, 404, { error: 'Table not found.' })
+        return json(response, 409, { error: 'This table is no longer available. Please choose another table or ask staff for help.' })
+      }
+      return json(response, 200, result.rows[0])
+    }
+
     if (request.method === 'POST' && action === 'create') {
       const table = request.body ?? {}
       if (!isValidTable(table)) {

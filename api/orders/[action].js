@@ -3,6 +3,7 @@ import { pool, query } from '../crumblyx-db.js'
 
 const ORDER_STATUSES = ['new', 'preparing', 'ready', 'completed']
 const ADD_ON_PRICES = { caramel: 30, cream: 25, oat: 25 }
+let archiveSchemaReady
 
 class RequestError extends Error {
   constructor(status, message) {
@@ -13,6 +14,20 @@ class RequestError extends Error {
 
 function json(response, status, body) {
   return response.status(status).json(body)
+}
+
+function ensureArchiveSchema() {
+  if (!archiveSchemaReady) {
+    archiveSchemaReady = query(`
+      ALTER TABLE orders
+        ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP WITH TIME ZONE
+    `).catch((error) => {
+      archiveSchemaReady = undefined
+      throw error
+    })
+  }
+  return archiveSchemaReady
 }
 
 function normalizeOrder(row) {
@@ -31,20 +46,23 @@ function normalizeOrder(row) {
     items: row.items,
     total: Number(row.total),
     status: row.status,
+    archived: Boolean(row.archived),
+    archivedAt: row.archived_at,
     notes: row.notes,
     createdAt: row.created_at,
     timeAgo: Number.isNaN(createdAt.getTime()) ? '' : createdAt.toLocaleString(),
   }
 }
 
-async function listOrders(response, customerId = null) {
+async function listOrders(response, customerId = null, archived = null) {
   const result = await query(`
     SELECT id, customer_name, customer_email, order_mode, table_number,
-           items, total, status, notes, created_at
+           items, total, status, archived, archived_at, notes, created_at
     FROM orders
     WHERE ($1::text IS NULL OR customer_id = $1)
+      AND ($2::boolean IS NULL OR archived = $2)
     ORDER BY created_at DESC
-  `, [customerId])
+  `, [customerId, archived])
   const orders = result.rows.map(normalizeOrder)
   const counts = Object.fromEntries(ORDER_STATUSES.map((status) => [status, 0]))
   for (const order of orders) counts[order.status] += 1
@@ -58,7 +76,7 @@ async function getOrder(id, response) {
   }
   const result = await query(`
     SELECT id, customer_name, customer_email, order_mode, table_number,
-           items, total, status, notes, created_at
+           items, total, status, archived, archived_at, notes, created_at
     FROM orders
     WHERE id = $1
   `, [id])
@@ -69,11 +87,11 @@ async function getOrder(id, response) {
 async function countOrders(response) {
   const result = await query(`
     SELECT
-      COUNT(*) FILTER (WHERE status = 'new') AS "new",
-      COUNT(*) FILTER (WHERE status = 'preparing') AS "preparing",
-      COUNT(*) FILTER (WHERE status = 'ready') AS "ready",
-      COUNT(*) FILTER (WHERE status = 'completed') AS "completed",
-      COUNT(*) AS "all"
+      COUNT(*) FILTER (WHERE status = 'new' AND archived = FALSE) AS "new",
+      COUNT(*) FILTER (WHERE status = 'preparing' AND archived = FALSE) AS "preparing",
+      COUNT(*) FILTER (WHERE status = 'ready' AND archived = FALSE) AS "ready",
+      COUNT(*) FILTER (WHERE status = 'completed' AND archived = FALSE) AS "completed",
+      COUNT(*) FILTER (WHERE archived = FALSE) AS "all"
     FROM orders
   `)
   const counts = Object.fromEntries(
@@ -224,7 +242,7 @@ async function createOrder(body, response) {
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
       RETURNING id, customer_name, customer_email, order_mode, table_number,
-                items, total, status, notes, created_at
+                items, total, status, archived, archived_at, notes, created_at
     `, [
       id,
       customerId,
@@ -258,11 +276,12 @@ async function updateOrder(body, response) {
     try {
       await client.query('BEGIN')
       const currentResult = await client.query(
-        'SELECT status, items FROM orders WHERE id = $1 FOR UPDATE',
+        'SELECT status, items, archived FROM orders WHERE id = $1 FOR UPDATE',
         [body.id],
       )
       if (currentResult.rowCount === 0) throw new RequestError(404, 'Order not found.')
       const current = currentResult.rows[0]
+      if (current.archived) throw new RequestError(409, 'Archived orders cannot be updated.')
       const nextByCurrent = { new: 'preparing', preparing: 'ready', ready: 'completed' }
       if (nextByCurrent[current.status] !== body.status) {
         throw new RequestError(409, 'Order status cannot be changed to that value.')
@@ -275,7 +294,7 @@ async function updateOrder(body, response) {
         SET status = $1, updated_at = CURRENT_TIMESTAMP
         WHERE id = $2
         RETURNING id, customer_name, customer_email, order_mode, table_number,
-                  items, total, status, notes, created_at
+                  items, total, status, archived, archived_at, notes, created_at
       `, [body.status, body.id])
       await client.query('COMMIT')
       return json(response, 200, normalizeOrder(result.rows[0]))
@@ -303,22 +322,48 @@ async function updateOrder(body, response) {
     updated_at = CURRENT_TIMESTAMP
     WHERE id = $3
       AND status IN ('new', 'preparing')
+      AND archived = FALSE
       AND EXISTS (
         SELECT 1 FROM jsonb_array_elements(items) AS element
         WHERE element->>'id' = $1
       )
     RETURNING id, customer_name, customer_email, order_mode, table_number,
-              items, total, status, notes, created_at
+              items, total, status, archived, archived_at, notes, created_at
   `, [body.itemId, body.checked, body.id])
   if (result.rowCount === 0) throw new RequestError(404, 'Order or editable order item not found.')
   return json(response, 200, normalizeOrder(result.rows[0]))
 }
 
+async function archiveOrder(id, response, archived) {
+  if (typeof id !== 'string' || !id) throw new RequestError(400, 'Order id is required.')
+  const result = await query(`
+    UPDATE orders
+    SET archived = $2,
+        archived_at = CASE WHEN $2 THEN CURRENT_TIMESTAMP ELSE NULL END,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = $1 AND status = 'completed' AND archived = $3
+    RETURNING id, customer_name, customer_email, order_mode, table_number,
+              items, total, status, archived, archived_at, notes, created_at
+  `, [id, archived, !archived])
+  if (result.rowCount > 0) return json(response, 200, normalizeOrder(result.rows[0]))
+
+  const existing = await query('SELECT status, archived FROM orders WHERE id = $1', [id])
+  if (existing.rowCount === 0) throw new RequestError(404, 'Order not found.')
+  if (existing.rows[0].status !== 'completed') {
+    throw new RequestError(409, 'Only completed orders can be archived.')
+  }
+  throw new RequestError(409, archived ? 'Order is already archived.' : 'Order is not archived.')
+}
+
 export default async function handler(request, response) {
   const { action } = request.query
   try {
+    await ensureArchiveSchema()
     if (request.method === 'GET' && action === 'get') {
       return await getOrder(request.query.id, response)
+    }
+    if (request.method === 'GET' && action === 'archive') {
+      return await listOrders(response, null, true)
     }
     if (request.method === 'GET' && action === 'count') {
       return await countOrders(response)
@@ -328,13 +373,19 @@ export default async function handler(request, response) {
       if (customerId !== undefined && (typeof customerId !== 'string' || !customerId)) {
         throw new RequestError(400, 'Customer id must be a non-empty string.')
       }
-      return await listOrders(response, customerId || null)
+      return await listOrders(response, customerId || null, customerId ? null : false)
     }
     if (request.method === 'POST' && action === 'create') {
       return await createOrder(request.body, response)
     }
     if (request.method === 'PUT' && action === 'update') {
       return await updateOrder(request.body, response)
+    }
+    if (request.method === 'POST' && action === 'archive') {
+      return await archiveOrder(request.body?.id, response, true)
+    }
+    if (request.method === 'POST' && action === 'restore') {
+      return await archiveOrder(request.body?.id, response, false)
     }
     return json(response, 405, { error: 'Method not allowed.' })
   } catch (error) {

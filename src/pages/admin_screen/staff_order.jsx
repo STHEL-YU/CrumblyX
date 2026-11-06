@@ -116,7 +116,7 @@ function StatusPill({ status }) {
   );
 }
 
-function OrderCard({ order, onToggleItem, onSelect, pendingAction, selected }) {
+function OrderCard({ order, onToggleItem, onSelect, onArchive, onRestore, archived, pendingAction, selected }) {
   const totalItems = order.items.length;
   const completedItems = order.items.filter((item) => item.checked).length;
   const progress = totalItems
@@ -253,13 +253,29 @@ function OrderCard({ order, onToggleItem, onSelect, pendingAction, selected }) {
             }}
           />
         </div>
-
+        {order.status === "completed" && (
+          <button
+            type="button"
+            className={`mt-4 inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${archived ? "border-stone-300 bg-white text-stone-700 hover:bg-stone-100" : "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100"} ${focusRing}`}
+            disabled={Boolean(pendingAction)}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (archived) onRestore(order);
+              else onArchive(order);
+            }}
+          >
+            {pendingAction === `${archived ? "restore" : "archive"}:${order.id}`
+              ? <StaffSpinner className="size-3" />
+              : <DashboardIcon name={archived ? "restore" : "archive"} size={15} />}
+            {archived ? "Restore order" : "Move to archive"}
+          </button>
+        )}
       </div>
     </article>
   );
 }
 
-function OrderDetailsPanel({ order, onClose, onAdvance, pendingAction }) {
+function OrderDetailsPanel({ order, onClose, onAdvance, onArchive, onRestore, archived, pendingAction }) {
   const actionLabel = ACTION_LABELS[order.status];
   const completedItems = order.items.filter((item) => item.checked).length;
   const blocked =
@@ -375,6 +391,20 @@ function OrderDetailsPanel({ order, onClose, onAdvance, pendingAction }) {
               )}
             </div>
           )}
+          {order.status === "completed" && (
+            <div className="border-t border-stone-100 pt-4">
+              <button
+                type="button"
+                className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${archived ? "border-stone-300 bg-white text-stone-700 hover:bg-stone-100" : "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100"} ${focusRing}`}
+                disabled={Boolean(pendingAction)}
+                onClick={() => archived ? onRestore(order) : onArchive(order)}
+              >
+                {pendingAction === `${archived ? "restore" : "archive"}:${order.id}`
+                  ? <><StaffSpinner />Updating archive…</>
+                  : <><DashboardIcon name={archived ? "restore" : "archive"} size={16} />{archived ? "Restore order" : "Move to archive"}</>}
+              </button>
+            </div>
+          )}
         </div>
       </section>
   );
@@ -407,6 +437,8 @@ function OrdersSkeleton() {
 
 export default function StaffOrders() {
   const [orders, setOrders] = useState([]);
+  const [archivedOrders, setArchivedOrders] = useState([]);
+  const [orderView, setOrderView] = useState("active");
   const [loading, setLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState("");
   const [error, setError] = useState("");
@@ -421,12 +453,17 @@ export default function StaffOrders() {
 
   useEffect(() => {
     const controller = new AbortController();
-    orderRequest("list", "GET", undefined, controller.signal)
-      .then((data) => {
-        if (!Array.isArray(data.orders))
+    Promise.all([
+      orderRequest("list", "GET", undefined, controller.signal),
+      orderRequest("archive", "GET", undefined, controller.signal),
+    ])
+      .then(([data, archiveData]) => {
+        if (!Array.isArray(data.orders) || !Array.isArray(archiveData.orders))
           throw new Error("Invalid orders response.");
-        if (!controller.signal.aborted)
+        if (!controller.signal.aborted) {
           setOrders(data.orders.map(normalizeOrder));
+          setArchivedOrders(archiveData.orders.map(normalizeOrder));
+        }
       })
       .catch((requestError) => {
         if (!controller.signal.aborted) setError(requestError.message);
@@ -444,10 +481,11 @@ export default function StaffOrders() {
     return result;
   }, {});
 
+  const displayOrders = orderView === "archive" ? archivedOrders : orders;
   const visibleOrders =
     filter === "all"
-      ? orders
-      : orders.filter((order) => order.status === filter);
+      ? displayOrders
+      : displayOrders.filter((order) => order.status === filter);
 
   async function toggleItem(orderId, itemId) {
     if (pendingAction) return;
@@ -508,6 +546,29 @@ export default function StaffOrders() {
     }
   }
 
+  async function moveOrderToArchive(order, archived) {
+    if (pendingAction) return;
+    setPendingAction(`${archived ? "archive" : "restore"}:${order.id}`);
+    try {
+      const updatedOrder = normalizeOrder(
+        await orderRequest(archived ? "archive" : "restore", "POST", { id: order.id }),
+      );
+      if (archived) {
+        setOrders((current) => current.filter((item) => item.id !== order.id));
+        setArchivedOrders((current) => [updatedOrder, ...current.filter((item) => item.id !== order.id)]);
+      } else {
+        setArchivedOrders((current) => current.filter((item) => item.id !== order.id));
+        setOrders((current) => [updatedOrder, ...current.filter((item) => item.id !== order.id)]);
+      }
+      setSelectedOrder((current) => current?.id === order.id ? null : current);
+      setError("");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setPendingAction("");
+    }
+  }
+
   function refreshOrders() {
     setLoading(true);
     setError("");
@@ -552,8 +613,9 @@ export default function StaffOrders() {
     setSection(name);
   }
 
-  const listTitle =
-    filter === "all" ? "All orders" : `${STATUS_LABELS[filter]} orders`;
+  const listTitle = orderView === "archive"
+    ? "Archived orders"
+    : filter === "all" ? "All orders" : `${STATUS_LABELS[filter]} orders`;
   const searchedOrders = visibleOrders.filter((order) => {
     const term = search.trim().toLocaleLowerCase();
     return !term || `${order.id} ${order.customerName || ""} ${order.orderType}`.toLocaleLowerCase().includes(term);
@@ -609,6 +671,24 @@ export default function StaffOrders() {
           <div className={adminTw("staff-orders-content")}>
             <div className="grid min-h-full gap-5 xl:grid-cols-[minmax(0,7fr)_minmax(310px,3fr)]">
               <section className="min-w-0" aria-labelledby="staff-order-list-title">
+                <nav className="mb-5 inline-flex rounded-xl border border-stone-200 bg-white p-1 shadow-sm" aria-label="Order views">
+                  <button
+                    type="button"
+                    aria-pressed={orderView === "active"}
+                    onClick={() => { setOrderView("active"); setFilter("all"); setSelectedOrder(null); }}
+                    className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-4 text-sm font-semibold transition ${orderView === "active" ? "bg-stone-900 text-white shadow-sm" : "text-stone-600 hover:bg-stone-50"}`}
+                  >
+                    Active orders <span className="text-xs opacity-70">{orders.length}</span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={orderView === "archive"}
+                    onClick={() => { setOrderView("archive"); setFilter("all"); setSelectedOrder(null); }}
+                    className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-4 text-sm font-semibold transition ${orderView === "archive" ? "bg-stone-900 text-white shadow-sm" : "text-stone-600 hover:bg-stone-50"}`}
+                  >
+                    <DashboardIcon name="archive" size={15} />Archive <span className="text-xs opacity-70">{archivedOrders.length}</span>
+                  </button>
+                </nav>
                 <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 text-stone-400 shadow-sm focus-within:border-amber-500 focus-within:ring-4 focus-within:ring-amber-500/10 sm:max-w-lg">
                     <DashboardIcon name="search" size={17} />
@@ -650,11 +730,11 @@ export default function StaffOrders() {
                     {listTitle}
                   </h2>
                   <p className="text-xs font-medium text-stone-500" aria-live="polite">
-                    {searchedOrders.length} of {orders.length} orders
+                    {searchedOrders.length} of {displayOrders.length} orders
                   </p>
                 </div>
 
-                <nav className="mb-5 flex gap-2 overflow-x-auto pb-1" aria-label="Filter orders by status">
+                {orderView === "active" && <nav className="mb-5 flex gap-2 overflow-x-auto pb-1" aria-label="Filter orders by status">
                   <button
                     type="button"
                     aria-pressed={filter === "all"}
@@ -675,7 +755,7 @@ export default function StaffOrders() {
                       {item.label} <span className="text-stone-400">{counts[item.status]}</span>
                     </button>
                   ))}
-                </nav>
+                </nav>}
 
                 {error && (
                   <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
@@ -691,7 +771,7 @@ export default function StaffOrders() {
                   </div>
                 )}
 
-                {loading && orders.length === 0 ? (
+                {loading && displayOrders.length === 0 ? (
                   <OrdersSkeleton />
                 ) : searchedOrders.length === 0 ? (
                   <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-12 text-center">
@@ -701,16 +781,20 @@ export default function StaffOrders() {
                     <h3 className="mt-4 text-base font-semibold text-stone-900">
                       {search
                         ? "No matching orders"
-                        : filter === "all"
-                          ? "No orders yet"
-                          : `No ${STATUS_LABELS[filter].toLowerCase()} orders`}
+                        : orderView === "archive"
+                          ? "No archived orders"
+                          : filter === "all"
+                            ? "No orders yet"
+                            : `No ${STATUS_LABELS[filter].toLowerCase()} orders`}
                     </h3>
                     <p className="mt-1 max-w-xs text-sm text-stone-500">
                       {search
                         ? "Try another order ID, customer name, or order type."
-                        : filter === "all"
-                          ? "New customer orders will show up here as they come in."
-                          : "Orders with this status will show up here."}
+                        : orderView === "archive"
+                          ? "Completed orders you archive will be kept here. You can restore them at any time."
+                          : filter === "all"
+                            ? "New customer orders will show up here as they come in."
+                            : "Orders with this status will show up here."}
                     </p>
                   </div>
                 ) : (
@@ -721,6 +805,9 @@ export default function StaffOrders() {
                         order={order}
                         onToggleItem={toggleItem}
                         onSelect={setSelectedOrder}
+                        onArchive={(order) => moveOrderToArchive(order, true)}
+                        onRestore={(order) => moveOrderToArchive(order, false)}
+                        archived={orderView === "archive"}
                         pendingAction={pendingAction}
                         selected={selectedOrder?.id === order.id}
                       />
@@ -735,6 +822,9 @@ export default function StaffOrders() {
                     order={selectedOrder}
                     onClose={() => setSelectedOrder(null)}
                     onAdvance={advanceOrder}
+                    onArchive={(order) => moveOrderToArchive(order, true)}
+                    onRestore={(order) => moveOrderToArchive(order, false)}
+                    archived={orderView === "archive"}
                     pendingAction={pendingAction}
                   />
                 ) : (

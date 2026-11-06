@@ -8,6 +8,7 @@ import CustomerSignup from './pages/costumer_screen/auth/cos_signup.jsx'
 import CosHome from './pages/costumer_screen/cos_home.jsx'
 import CosOrderType from './pages/costumer_screen/cos_order_type.jsx'
 import CosTableScanner from './pages/costumer_screen/cos_table_scanner.jsx'
+import CosTableBooking from './pages/costumer_screen/cos_table_booking.jsx'
 import CosWelcome from './pages/costumer_screen/cos_welcome.jsx'
 import StaffLogin from './pages/admin_screen/auth/staff_login.jsx'
 import StaffDashboard from './pages/admin_screen/staff_dashboard.jsx'
@@ -46,6 +47,7 @@ export default function AppLayout() {
         <Route path="/staff/stocks" element={<StaffStock />} />
         <Route path="/staff/tables" element={<StaffTables />} />
         <Route path="/staff/customers" element={<StaffCustomers />} />
+        <Route path="/book-table" element={<CustomerAuthScene><CosTableBooking /></CustomerAuthScene>} />
         <Route
           path="/"
           element={

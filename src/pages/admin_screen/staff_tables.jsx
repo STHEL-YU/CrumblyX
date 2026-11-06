@@ -233,9 +233,8 @@ function TableQrDialog({ table, onClose }) {
   const [error, setError] = useState('')
   const dialogRef = useRef(null)
   const closeRef = useRef(onClose)
-  const tableUrl = new URL('/home', window.location.origin)
-  tableUrl.searchParams.set('mode', 'dine-in')
-  tableUrl.searchParams.set('table', table.tableName)
+  const tableUrl = new URL('/book-table', window.location.origin)
+  tableUrl.searchParams.set('id', table.id)
   const qrUrl = tableUrl.toString()
 
   useEffect(() => {
@@ -303,7 +302,7 @@ function TableQrDialog({ table, onClose }) {
       >
         <header className={adminTw('flex items-start justify-between gap-4 text-left')}>
           <div>
-            <p className={adminTw('text-xs font-bold uppercase tracking-[0.14em] text-amber-700')}>Scan to order</p>
+            <p className={adminTw('text-xs font-bold uppercase tracking-[0.14em] text-amber-700')}>Scan to book</p>
             <h2 id="staff-table-qr-title" className={adminTw('mt-1 text-lg font-semibold text-stone-900')}>{table.tableName}</h2>
           </div>
           <button type="button" aria-label="Close table QR code" onClick={onClose} className={adminTw('-mr-2 -mt-1 rounded-lg p-2 text-stone-500 transition hover:bg-stone-100 hover:text-stone-800')}>
@@ -317,7 +316,7 @@ function TableQrDialog({ table, onClose }) {
               ? <p className={adminTw('text-sm text-rose-700')} role="alert">{error}</p>
               : <p className={adminTw('text-sm text-stone-500')} role="status">Generating QR code…</p>}
         </div>
-        <p className={adminTw('mt-4 text-sm text-stone-600')}>Scan this code to open the dine-in menu for {table.tableName}.</p>
+        <p className={adminTw('mt-4 text-sm text-stone-600')}>Scan this code to view the table details and book {table.tableName}.</p>
         <p className={adminTw('mt-1 break-all text-xs text-stone-400')}>{qrUrl}</p>
         <div className={adminTw('staff-table-qr-print-actions mt-5 flex flex-wrap justify-center gap-2')}>
           <button type="button" className={adminTw('inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-700 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50')} onClick={() => window.print()} disabled={!qrImage}>
