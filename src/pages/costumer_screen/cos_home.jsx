@@ -29,6 +29,11 @@ function nameKey(value) {
     .toLocaleLowerCase();
 }
 
+function formatTableLabel(value) {
+  const table = String(value || "").trim();
+  return /^table\b/i.test(table) ? table : `Table ${table}`;
+}
+
 function getAvailableProducts(menuItems, stockRecords) {
   const stocksById = new Map(stockRecords.map((record) => [record.id, record]));
   const stocksByName = new Map(
@@ -518,7 +523,7 @@ export default function CosHome() {
                 </strong>
                 <p className="m-0 mt-0.5 text-[0.8rem] font-medium leading-snug opacity-70">
                   {orderMode === "dine-in" && tableNumber
-                    ? `You’re seated at Table ${tableNumber}. Your order will be brought directly to you.`
+                    ? `You’re seated at ${formatTableLabel(tableNumber)}. Your order will be brought directly to you.`
                     : "Place your order and pick it up when it’s ready."}
                 </p>
               </div>
@@ -1028,7 +1033,7 @@ export default function CosHome() {
                   <h4>Order</h4>
                   <p>
                     {order.mode === "dine-in"
-                      ? `Dine in · Table ${order.tableNumber}`
+                      ? `Dine in · ${formatTableLabel(order.tableNumber)}`
                       : "Takeout"}
                     {" · "}₱ {Number(order.total).toFixed(2)}
                     {order.createdAt && (

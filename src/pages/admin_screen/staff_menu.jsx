@@ -610,6 +610,7 @@ export default function StaffMenu() {
       Orders: '/staff/orders',
       Sales: '/staff/sales',
       Stocks: '/staff/stocks',
+      Tables: '/staff/tables',
       Customers: '/staff/customers',
     }
     if (routes[name]) {

@@ -17,8 +17,9 @@ function json(response, status, body) {
 
 function normalizeOrder(row) {
   const createdAt = new Date(row.created_at)
+  const tableNumber = String(row.table_number || '').trim()
   const orderType = row.order_mode === 'dine-in'
-    ? `Table ${row.table_number || ''}`.trim()
+    ? (/^table\b/i.test(tableNumber) ? tableNumber : `Table ${tableNumber}`).trim()
     : 'Take out'
   return {
     id: row.id,

@@ -4,5 +4,6 @@ export const STAFF_NAVIGATION = [
   { name: 'Sales', icon: 'sales' },
   { name: 'Menu', icon: 'menu' },
   { name: 'Stocks', icon: 'stocks' },
+  { name: 'Tables', icon: 'table' },
   { name: 'Customers', icon: 'customers' },
 ]

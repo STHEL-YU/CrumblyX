@@ -306,7 +306,7 @@ export default function StaffDashboard() {
 
   function choosePage(page) {
     setDrawerOpen(false)
-    const routes = { Dashboard: '/staff/dashboard', Orders: '/staff/orders', Sales: '/staff/sales', Menu: '/staff/menu', Stocks: '/staff/stocks', Customers: '/staff/customers' }
+    const routes = { Dashboard: '/staff/dashboard', Orders: '/staff/orders', Sales: '/staff/sales', Menu: '/staff/menu', Stocks: '/staff/stocks', Tables: '/staff/tables', Customers: '/staff/customers' }
     if (routes[page] && page !== 'Dashboard') navigate(routes[page])
   }
 

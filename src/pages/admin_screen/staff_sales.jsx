@@ -159,6 +159,7 @@ export default function StaffSales() {
       Sales: '/staff/sales',
       Menu: '/staff/menu',
       Stocks: '/staff/stocks',
+      Tables: '/staff/tables',
       Customers: '/staff/customers',
     }
     if (routes[name] && name !== 'Sales') navigate(routes[name])

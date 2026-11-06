@@ -358,6 +358,7 @@ export default function StaffStock() {
     else if (name === 'Orders') navigate('/staff/orders')
     else if (name === 'Sales') navigate('/staff/sales')
     else if (name === 'Menu') navigate('/staff/menu')
+    else if (name === 'Tables') navigate('/staff/tables')
     else if (name === 'Customers') navigate('/staff/customers')
   }
 

@@ -318,7 +318,7 @@ export default function StaffCustomers() {
 
   function navigateSection(name) {
     setDrawerOpen(false)
-    const routes = { Dashboard: '/staff/dashboard', Orders: '/staff/orders', Sales: '/staff/sales', Menu: '/staff/menu', Stocks: '/staff/stocks' }
+    const routes = { Dashboard: '/staff/dashboard', Orders: '/staff/orders', Sales: '/staff/sales', Menu: '/staff/menu', Stocks: '/staff/stocks', Tables: '/staff/tables' }
     if (routes[name]) navigate(routes[name])
   }
 

@@ -537,6 +537,10 @@ export default function StaffOrders() {
       navigate("/staff/stocks");
       return;
     }
+    if (name === "Tables") {
+      navigate("/staff/tables");
+      return;
+    }
     if (name === "Customers") {
       navigate("/staff/customers");
       return;

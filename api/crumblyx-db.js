@@ -54,6 +54,20 @@ export async function createStockTable() {
   `)
 }
 
+export async function createDiningTablesTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS dining_tables (
+      id TEXT PRIMARY KEY,
+      table_name VARCHAR(50) NOT NULL UNIQUE,
+      table_type VARCHAR(50) NOT NULL,
+      seats INTEGER NOT NULL CHECK (seats BETWEEN 1 AND 1000),
+      available BOOLEAN NOT NULL DEFAULT TRUE,
+      image TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+}
+
 export async function createCustomersTable() {
   await query(`
     CREATE TABLE IF NOT EXISTS customers (
@@ -246,10 +260,11 @@ if (isDirectScript) {
   try {
     await createMenuTable()
     await createStockTable()
+    await createDiningTablesTable()
     await createCustomersTable()
     await createMessagesTable()
     await createOrdersTable()
-    console.log('menu_items, stock_items, customers, messages, and orders tables created successfully')
+    console.log('menu_items, stock_items, dining_tables, customers, messages, and orders tables created successfully')
   } catch (error) {
     console.error('Database setup failed:', error.message)
     process.exitCode = 1

@@ -10,6 +10,8 @@ function DashboardIcon({ name, size = 19 }) {
     chart: <><path d="M4 19V5M4 19h17" /><path d="M8 15v-4M13 15V8M18 15V5" /></>,
     menu: <><path d="M4 6h16M4 12h16M4 18h16" /><circle cx="7" cy="6" r=".5" fill="currentColor" /><circle cx="7" cy="12" r=".5" fill="currentColor" /><circle cx="7" cy="18" r=".5" fill="currentColor" /></>,
     stocks: <><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9Z" /><path d="m3.5 7.8 8.5 4.4 8.5-4.4M12 12.2V21M7.5 5.2l9 4.6" /></>,
+    table: <><path d="M3 8h18M5 8v12M19 8v12M3 8l2-4h14l2 4M9 8v12M15 8v12" /></>,
+    qr: <><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM19 14h2M19 19v2M14 19h2M7 3v3M3 7h3M17 3v3M14 7h3M3 17h3M7 17v4" /></>,
     customers: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 5.2a3.5 3.5 0 0 1 0 6.7M17 14a6 6 0 0 1 4.5 5.8" /></>,
     userPlus: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6" /></>,
     userSlash: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0M4 4l16 16" /></>,

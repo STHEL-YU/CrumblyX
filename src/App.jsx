@@ -14,6 +14,7 @@ import StaffDashboard from './pages/admin_screen/staff_dashboard.jsx'
 import StaffOrders from './pages/admin_screen/staff_order.jsx'
 import StaffMenu from './pages/admin_screen/staff_menu.jsx'
 import StaffStock from './pages/admin_screen/staff_stock.jsx'
+import StaffTables from './pages/admin_screen/staff_tables.jsx'
 import StaffCustomers from './pages/admin_screen/staff_costumer.jsx'
 import StaffSales from './pages/admin_screen/staff_sales.jsx'
 
@@ -26,7 +27,12 @@ export default function AppLayout() {
     sessionStorage.setItem('crumblyx-customer-id', customer.id)
     sessionStorage.setItem('crumblyx-customer-name', customer.name)
     sessionStorage.setItem('crumblyx-customer-email', customer.email)
-    navigate('/order-type')
+    const returnTo = location.state?.returnTo
+    const isInternalCustomerRoute = typeof returnTo === 'string'
+      && returnTo.startsWith('/')
+      && !returnTo.startsWith('//')
+      && !returnTo.startsWith('/staff/')
+    navigate(isInternalCustomerRoute ? returnTo : '/order-type', { replace: true })
   }
 
   return (
@@ -38,6 +44,7 @@ export default function AppLayout() {
         <Route path="/staff/sales" element={<StaffSales />} />
         <Route path="/staff/menu" element={<StaffMenu />} />
         <Route path="/staff/stocks" element={<StaffStock />} />
+        <Route path="/staff/tables" element={<StaffTables />} />
         <Route path="/staff/customers" element={<StaffCustomers />} />
         <Route
           path="/"
@@ -61,7 +68,7 @@ export default function AppLayout() {
             <CustomerAuthScene>
               <CustomerLogin
                 onSubmit={completeAuthentication}
-                onSwitch={() => navigate('/register')}
+                onSwitch={() => navigate('/register', { state: location.state })}
               />
             </CustomerAuthScene>
           }
@@ -72,7 +79,7 @@ export default function AppLayout() {
             <CustomerAuthScene>
               <CustomerSignup
                 onSubmit={completeAuthentication}
-                onSwitch={() => navigate('/login')}
+                onSwitch={() => navigate('/login', { state: location.state })}
               />
             </CustomerAuthScene>
           }
@@ -117,12 +124,16 @@ export default function AppLayout() {
 }
 
 function CustomerOnly({ children }) {
+  const location = useLocation()
   const hasCustomerSession = Boolean(
     sessionStorage.getItem('crumblyx-customer-id')
     && sessionStorage.getItem('crumblyx-customer-email'),
   )
 
-  return hasCustomerSession ? children : <Navigate to="/login" replace />
+  const returnTo = `${location.pathname}${location.search}${location.hash}`
+  return hasCustomerSession
+    ? children
+    : <Navigate to="/login" state={{ returnTo }} replace />
 }
 
 function SplashRoute() {
