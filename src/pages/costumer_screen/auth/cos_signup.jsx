@@ -148,13 +148,13 @@ export default function CustomerSignup({ onSubmit, onSwitch }) {
           </button>
         </p>
 
-        <div className="social-divider mb-[18px] mt-6 flex items-center gap-3.5 text-[0.72rem] font-semibold uppercase tracking-[0.1em] opacity-60">
+        {/* <div className="social-divider mb-[18px] mt-6 flex items-center gap-3.5 text-[0.72rem] font-semibold uppercase tracking-[0.1em] opacity-60">
           <span className="h-px flex-1 bg-current opacity-25" />
           or sign up with
           <span className="h-px flex-1 bg-current opacity-25" />
-        </div>
+        </div> */}
 
-        <div className="social-buttons grid grid-cols-3 gap-3">
+        {/* <div className="social-buttons grid grid-cols-3 gap-3">
           {["google", "apple", "facebook"].map((social) => (
             <button
               type="button"
@@ -165,7 +165,7 @@ export default function CustomerSignup({ onSubmit, onSwitch }) {
               <Icon name={social} size={19} />
             </button>
           ))}
-        </div>
+        </div> */}
 
         <footer className="auth-footer mt-7 text-center">
           <p className="auth-est mb-0 mt-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.25em] opacity-50">
