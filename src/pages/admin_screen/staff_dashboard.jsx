@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DashboardIcon, StaffProfileDialog, StaffSpinner } from './staff_admin_shared.jsx'
+import { logoutStaff } from './auth/staff_auth_client.js'
 import Sidebar from './staff_sidebar.jsx'
 import StaffMessageInbox from './staff_message_inbox.jsx'
 import { adminTw } from './staff_admin_tw.js'
@@ -8,6 +9,7 @@ import { useStaffProfile } from './staff_profile.js'
 
 const NOTES_KEY = 'crumblyx.staff-dashboard-notes.v1'
 const REFRESH_INTERVAL = 30000
+const LOW_STOCK_THRESHOLD = 5
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const ORDER_FILTERS = [
   { value: 'all', label: 'All' },
@@ -211,6 +213,8 @@ export default function StaffDashboard() {
   })
   const [notes, setNotes] = useState(readNotes)
   const [notesError, setNotesError] = useState('')
+  const [stockLoading, setStockLoading] = useState(true)
+  const [stockError, setStockError] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const { profileOpen, openProfile, closeProfile } = useStaffProfile()
   const navigate = useNavigate()
@@ -235,9 +239,23 @@ export default function StaffDashboard() {
           else errors.push('Orders response was invalid.')
         } else errors.push(`Orders: ${results[0].reason.message}`)
         if (results[1].status === 'fulfilled') {
-          if (Array.isArray(results[1].value)) setStocks(results[1].value)
-          else errors.push('Stocks response was invalid.')
-        } else errors.push(`Stocks: ${results[1].reason.message}`)
+          if (Array.isArray(results[1].value)) {
+            setStocks(results[1].value.map((item) => ({
+              ...item,
+              quantity: item.quantity == null ? null : Number(item.quantity),
+            })))
+            setStockError('')
+          } else {
+            setStocks([])
+            setStockError('The inventory response was invalid.')
+            errors.push('Stocks response was invalid.')
+          }
+        } else {
+          setStocks([])
+          setStockError(results[1].reason.message)
+          errors.push(`Stocks: ${results[1].reason.message}`)
+        }
+        setStockLoading(false)
         setLoadError(errors.join(' '))
         setLoading(false)
       }
@@ -283,7 +301,14 @@ export default function StaffDashboard() {
     .reduce((sum, order) => sum + (Number(order.total) || 0), 0)
   const newOrders = selectedDayOrders.filter((order) => order.status === 'new').length
   const pendingOrders = selectedDayOrders.filter((order) => ['new', 'preparing'].includes(order.status)).length
-  const lowStock = stocks.filter((item) => item.quantity != null && Number(item.quantity) <= 5)
+  const lowStock = useMemo(
+    () => stocks
+      .filter((item) => Number.isFinite(item.quantity)
+        && item.quantity >= 0
+        && item.quantity <= LOW_STOCK_THRESHOLD)
+      .sort((first, second) => first.quantity - second.quantity || first.name.localeCompare(second.name)),
+    [stocks],
+  )
 
   function addNote(date, text) {
     saveNotes({ ...notes, [date]: [...(notes[date] || []), { id: crypto.randomUUID(), text, done: false }] })
@@ -300,8 +325,14 @@ export default function StaffDashboard() {
     saveNotes({ ...notes, [date]: (notes[date] || []).filter((note) => note.id !== noteId) })
   }
 
-  function logout() {
-    if (window.confirm('Are you sure you want to log out?')) navigate('/staff/login')
+  async function logout() {
+    if (!window.confirm('Are you sure you want to log out?')) return
+    try {
+      await logoutStaff()
+      navigate('/staff/login', { replace: true })
+    } catch (error) {
+      window.alert(error.message)
+    }
   }
 
   function choosePage(page) {
@@ -322,7 +353,7 @@ export default function StaffDashboard() {
           </div>
           <div className={adminTw('admin-top-actions')}>
             <StaffMessageInbox />
-            <button type="button" className={adminTw('admin-avatar top-avatar admin-avatar-trigger')} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
+            <button type="button" className={adminTw('admin-avatar top-avatar admin-avatar-trigger')} aria-label="View staff profile for Crumblyx Staff" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>CS</button>
           </div>
         </header>
 
@@ -439,21 +470,26 @@ export default function StaffDashboard() {
                   <header className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-700">Inventory</p>
-                      <h2 id="dashboard-stock-title" className="mt-1 text-lg font-bold tracking-tight text-stone-900">Needs attention</h2>
+                      <h2 id="dashboard-stock-title" className="mt-1 text-lg font-bold tracking-tight text-stone-900">Needs attention <span className="text-sm font-semibold text-stone-500">({stockLoading || stockError ? '—' : lowStock.length})</span></h2>
                     </div>
-                    <span className={`grid size-10 place-items-center rounded-xl ${lowStock.length ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}><DashboardIcon name={lowStock.length ? 'warning' : 'checkCircle'} size={19} /></span>
+                    <span className={`grid size-10 place-items-center rounded-xl ${stockError || lowStock.length ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}><DashboardIcon name={stockError || lowStock.length ? 'warning' : 'checkCircle'} size={19} /></span>
                   </header>
-                  {lowStock.length ? (
+                  {stockLoading ? (
+                    <p className="mt-4 rounded-xl bg-stone-50 px-3 py-3 text-sm text-stone-600" role="status">Loading live stock levels…</p>
+                  ) : stockError ? (
+                    <p className="mt-4 rounded-xl bg-rose-50 px-3 py-3 text-sm text-rose-800" role="alert">Could not load stock levels: {stockError}</p>
+                  ) : lowStock.length ? (
                     <ul className="mt-4 grid gap-2">
                       {lowStock.slice(0, 5).map((item) => (
                         <li key={item.id} className="flex items-center justify-between gap-3 rounded-xl bg-stone-50 px-3 py-2.5">
                           <span className="min-w-0 truncate text-sm font-medium text-stone-700">{item.name}</span>
-                          <span className={`shrink-0 text-xs font-semibold ${Number(item.quantity) === 0 ? 'text-rose-700' : 'text-amber-700'}`}>{Number(item.quantity) === 0 ? 'Out' : `${item.quantity} left`}</span>
+                          <span className={`shrink-0 text-xs font-semibold ${item.quantity === 0 ? 'text-rose-700' : 'text-amber-700'}`}>{item.quantity === 0 ? 'Out' : `${item.quantity} left`}</span>
                         </li>
                       ))}
+                      {lowStock.length > 5 && <li className="px-3 text-xs font-medium text-stone-500">And {lowStock.length - 5} more items need attention</li>}
                     </ul>
                   ) : (
-                    <p className="mt-4 rounded-xl bg-emerald-50 px-3 py-3 text-sm text-emerald-800">{loading ? 'Checking stock levels…' : 'No low-stock items right now.'}</p>
+                    <p className="mt-4 rounded-xl bg-emerald-50 px-3 py-3 text-sm text-emerald-800">No low-stock items right now.</p>
                   )}
                   <button type="button" className="mt-4 text-sm font-semibold text-amber-800 transition hover:text-amber-950" onClick={() => navigate('/staff/stocks')}>Review inventory <span aria-hidden="true">→</span></button>
                 </section>

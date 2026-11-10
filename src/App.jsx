@@ -11,6 +11,7 @@ import CosTableScanner from './pages/costumer_screen/cos_table_scanner.jsx'
 import CosTableBooking from './pages/costumer_screen/cos_table_booking.jsx'
 import CosWelcome from './pages/costumer_screen/cos_welcome.jsx'
 import StaffLogin from './pages/admin_screen/auth/staff_login.jsx'
+import StaffAuthGate from './pages/admin_screen/auth/staff_auth_gate.jsx'
 import StaffDashboard from './pages/admin_screen/staff_dashboard.jsx'
 import StaffOrders from './pages/admin_screen/staff_order.jsx'
 import StaffMenu from './pages/admin_screen/staff_menu.jsx'
@@ -36,17 +37,28 @@ export default function AppLayout() {
     navigate(isInternalCustomerRoute ? returnTo : '/order-type', { replace: true })
   }
 
+  async function completeStaffAuthentication(credentials) {
+    const response = await fetch('/api/staff-auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(credentials),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(data.error || 'Unable to sign in.')
+    navigate('/staff/dashboard', { replace: true })
+  }
+
   return (
     <div className={`app-shell ${currentPath.startsWith('/staff/') ? 'staff-shell' : ''}`}>
       <Routes>
-        <Route path="/staff/login" element={<StaffLogin />} />
-        <Route path="/staff/dashboard" element={<StaffDashboard />} />
-        <Route path="/staff/orders" element={<StaffOrders />} />
-        <Route path="/staff/sales" element={<StaffSales />} />
-        <Route path="/staff/menu" element={<StaffMenu />} />
-        <Route path="/staff/stocks" element={<StaffStock />} />
-        <Route path="/staff/tables" element={<StaffTables />} />
-        <Route path="/staff/customers" element={<StaffCustomers />} />
+        <Route path="/staff/login" element={<StaffLogin onSubmit={completeStaffAuthentication} />} />
+        <Route path="/staff/dashboard" element={<StaffAuthGate><StaffDashboard /></StaffAuthGate>} />
+        <Route path="/staff/orders" element={<StaffAuthGate><StaffOrders /></StaffAuthGate>} />
+        <Route path="/staff/sales" element={<StaffAuthGate><StaffSales /></StaffAuthGate>} />
+        <Route path="/staff/menu" element={<StaffAuthGate><StaffMenu /></StaffAuthGate>} />
+        <Route path="/staff/stocks" element={<StaffAuthGate><StaffStock /></StaffAuthGate>} />
+        <Route path="/staff/tables" element={<StaffAuthGate><StaffTables /></StaffAuthGate>} />
+        <Route path="/staff/customers" element={<StaffAuthGate><StaffCustomers /></StaffAuthGate>} />
         <Route path="/book-table" element={<CustomerAuthScene><CosTableBooking /></CustomerAuthScene>} />
         <Route
           path="/"

@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Icon, Logo } from '../../../components/customer_ui.jsx'
 import { StaffSpinner } from '../staff_admin_shared.jsx'
 import { adminTw } from '../staff_admin_tw.js'
 
 export default function StaffLogin({ onSubmit, onForgotPassword, onSignUp, onSocialLogin }) {
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
@@ -13,6 +15,23 @@ export default function StaffLogin({ onSubmit, onForgotPassword, onSignUp, onSoc
   const [notice, setNotice] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [optionalAction, setOptionalAction] = useState('')
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/staff-auth/session', { signal: controller.signal })
+      .then(async (response) => {
+        if (response.status === 401) return
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(data.error || 'Could not verify staff sign-in.')
+        navigate('/staff/dashboard', { replace: true })
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          setFormError(error instanceof Error ? error.message : 'Could not verify staff sign-in.')
+        }
+      })
+    return () => controller.abort()
+  }, [navigate])
 
   async function submit(event) {
     event.preventDefault()
@@ -77,7 +96,7 @@ export default function StaffLogin({ onSubmit, onForgotPassword, onSignUp, onSoc
 
       <main className={adminTw("staff-login-main")}>
         <section className={adminTw("staff-login-card")} aria-labelledby="staff-login-title">
-          <h1 className={adminTw("staff-login-card-title")} id="staff-login-title">Welcome Back!</h1>
+          <h1 className={adminTw("staff-login-card-title")} id="staff-login-title">Welcome Admin!</h1>
           <p className={adminTw("staff-login-subtitle")}>Sign In to continue</p>
 
           <form onSubmit={submit} noValidate>
@@ -137,42 +156,6 @@ export default function StaffLogin({ onSubmit, onForgotPassword, onSignUp, onSoc
               {isSubmitting ? <><span className={adminTw("staff-login-spinner")} aria-hidden="true" /> Signing in…</> : 'Sign In'}
             </button>
           </form>
-
-          <div className={adminTw("staff-login-options")}>
-            <label className={adminTw("staff-login-remember")}>
-              <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />
-              <span>Remember Me</span>
-            </label>
-            <button type="button" className={adminTw("staff-login-link")} disabled={Boolean(optionalAction)} onClick={() => runOptionalAction('forgot', onForgotPassword, 'Password reset is not available yet. Contact your administrator.')}>
-              {optionalAction === 'forgot' && <StaffSpinner className="mr-1 size-3" />}Forgot password?
-            </button>
-          </div>
-
-          <p className={adminTw("staff-login-signup")}>
-            Don&apos;t have an account?{' '}
-            <button type="button" className={adminTw("staff-login-link staff-login-signup-link")} disabled={Boolean(optionalAction)} onClick={() => runOptionalAction('signup', onSignUp, 'Staff account registration is managed by your administrator.')}>
-              {optionalAction === 'signup' && <StaffSpinner className="mr-1 size-3" />}Sign up
-            </button>
-          </p>
-
-          <div className={adminTw("staff-login-divider")}><span />or sign in with<span /></div>
-          <div className={adminTw("staff-login-socials")} aria-label="Other sign-in options">
-            {['google', 'apple', 'facebook'].map((provider) => (
-              <button
-                type="button"
-                aria-label={`Sign in with ${provider}`}
-                disabled={Boolean(optionalAction)}
-                key={provider}
-                onClick={() => runOptionalAction(
-                  provider,
-                  onSocialLogin ? () => onSocialLogin(provider) : undefined,
-                  `${provider[0].toUpperCase()}${provider.slice(1)} sign-in is not available yet.`,
-                )}
-              >
-                {optionalAction === provider ? <StaffSpinner /> : <Icon name={provider} size={20} />}
-              </button>
-            ))}
-          </div>
           {notice && <p className={adminTw("staff-login-notice")} role="status">{notice}</p>}
         </section>
       </main>

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { query } from '../crumblyx-db.js'
+import { requireStaffSession } from '../staff-auth.js'
 
 class RequestError extends Error {
 	constructor(status, message) {
@@ -41,6 +42,11 @@ export default async function handler(request, response) {
 	const { action } = request.query
 
 	try {
+		const staffAction = (request.method === 'GET' && action === 'conversations')
+			|| (request.method === 'POST' && action === 'send' && request.body?.senderType === 'staff')
+			|| (request.method === 'PUT' && action === 'read' && request.body?.readerType === 'staff')
+		if (staffAction && !await requireStaffSession(request, response)) return
+
 		if (request.method === 'GET' && action === 'list') {
 			const customerId = request.query.customerId
 			if (typeof customerId !== 'string' || !customerId.trim()) {

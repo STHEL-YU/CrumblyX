@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { pool, query } from '../crumblyx-db.js'
+import { requireStaffSession } from '../staff-auth.js'
 
 const ORDER_STATUSES = ['new', 'preparing', 'ready', 'completed']
 const ADD_ON_PRICES = { caramel: 30, cream: 25, oat: 25 }
@@ -355,9 +356,42 @@ async function archiveOrder(id, response, archived) {
   throw new RequestError(409, archived ? 'Order is already archived.' : 'Order is not archived.')
 }
 
+async function permanentlyDeleteOrder(id, response) {
+  if (typeof id !== 'string' || !id) throw new RequestError(400, 'Order id is required.')
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const existing = await client.query(
+      'SELECT id, archived FROM orders WHERE id = $1 FOR UPDATE',
+      [id],
+    )
+    if (existing.rowCount === 0) throw new RequestError(404, 'Order not found.')
+    if (!existing.rows[0].archived) {
+      throw new RequestError(409, 'Only archived orders can be permanently deleted.')
+    }
+    await client.query('DELETE FROM orders WHERE id = $1', [id])
+    await client.query('COMMIT')
+    return json(response, 200, { deleted: true, id })
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
 export default async function handler(request, response) {
   const { action } = request.query
   try {
+    const isCustomerOrderList = request.method === 'GET'
+      && (!action || action === 'list')
+      && typeof request.query.customerId === 'string'
+      && Boolean(request.query.customerId)
+    const isCustomerOrderRead = request.method === 'GET' && action === 'get'
+    const isCustomerOrderCreate = request.method === 'POST' && action === 'create'
+    if (!isCustomerOrderList && !isCustomerOrderRead && !isCustomerOrderCreate
+      && !await requireStaffSession(request, response)) return
+
     await ensureArchiveSchema()
     if (request.method === 'GET' && action === 'get') {
       return await getOrder(request.query.id, response)
@@ -386,6 +420,9 @@ export default async function handler(request, response) {
     }
     if (request.method === 'POST' && action === 'restore') {
       return await archiveOrder(request.body?.id, response, false)
+    }
+    if (request.method === 'POST' && action === 'permanent-delete') {
+      return await permanentlyDeleteOrder(request.body?.id, response)
     }
     return json(response, 405, { error: 'Method not allowed.' })
   } catch (error) {

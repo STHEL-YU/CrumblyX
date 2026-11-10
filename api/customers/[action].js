@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
 import { query } from '../crumblyx-db.js'
+import { requireStaffSession } from '../staff-auth.js'
 
 const scrypt = promisify(scryptCallback)
 
@@ -87,6 +88,12 @@ export default async function handler(request, response) {
 	const { action } = request.query
 
 	try {
+		const isCustomerAuthentication = request.method === 'POST'
+			&& ['register', 'login'].includes(action)
+		const isCustomerProfileUpdate = request.method === 'PUT' && action === 'profile'
+		if (!isCustomerAuthentication && !isCustomerProfileUpdate
+			&& !await requireStaffSession(request, response)) return
+
 		if (request.method === 'POST' && action === 'register') {
 			const credentials = validateCredentials(request.body, true)
 			const phone = typeof request.body.phone === 'string' ? request.body.phone.trim() : ''

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { createDiningTablesTable, query } from '../crumblyx-db.js'
+import { requireStaffSession } from '../staff-auth.js'
 
 let schemaReady
 
@@ -37,6 +38,11 @@ export default async function handler(request, response) {
 
   try {
     await ensureSchema()
+
+    if (!(
+      (request.method === 'GET' && ['list', 'get'].includes(action || 'list'))
+      || (request.method === 'POST' && action === 'reserve')
+    ) && !await requireStaffSession(request, response)) return
 
     if (request.method === 'GET' && (!action || action === 'list')) {
       const result = await query(`

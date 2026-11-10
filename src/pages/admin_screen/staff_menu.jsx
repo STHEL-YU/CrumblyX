@@ -1,13 +1,14 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DashboardIcon, StaffProfileDialog, StaffSpinner } from './staff_admin_shared.jsx'
+import { logoutStaff } from './auth/staff_auth_client.js'
 import Sidebar from './staff_sidebar.jsx'
 import StaffMessageInbox from './staff_message_inbox.jsx'
 import { adminTw } from './staff_admin_tw.js'
 import { useStaffProfile } from './staff_profile.js'
 import { STAFF_NAVIGATION } from './staff_navigation.js'
 
-const CATEGORY_FILTERS = ['All', 'Pastry', 'Beverages']
+const CATEGORY_FILTERS = ['All', 'Pastry', 'Meal', 'Beverages']
 const MENU_CACHE_KEY = 'crumblyx.menu.v1'
 const SKELETON_ROWS = [0, 1, 2, 3, 4, 5]
 const MENU_PAGE_SIZE = 8
@@ -18,6 +19,7 @@ const primaryBtn = 'inline-flex items-center justify-center gap-2 rounded-lg bg-
 const ghostBtn = 'inline-flex items-center justify-center rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold text-stone-700 transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-stone-400/20'
 const categoryTone = {
   Pastry: 'bg-amber-50 text-amber-800 ring-amber-600/20',
+  Meal: 'bg-emerald-50 text-emerald-800 ring-emerald-600/20',
   Beverages: 'bg-sky-50 text-sky-800 ring-sky-600/20',
 }
 
@@ -275,6 +277,7 @@ function MenuItemDialog({ item, onClose, onSave }) {
             Category
             <select className={adminTw(inputCls)} value={category} onChange={(event) => setCategory(event.target.value)}>
               <option>Pastry</option>
+              <option>Meal</option>
               <option>Beverages</option>
             </select>
           </label>
@@ -554,8 +557,11 @@ export default function StaffMenu() {
   async function deleteItem(item) {
     setDeleting(true)
     try {
-      await menuRequest(`delete?id=${encodeURIComponent(item.id)}`, 'DELETE', { id: item.id })
+      const result = await menuRequest(`delete?id=${encodeURIComponent(item.id)}`, 'DELETE', { id: item.id })
       setItems((current) => current.filter((entry) => entry.id !== item.id))
+      const deletedStockIds = new Set((result.stockRecords || []).map((record) => record.id))
+      setStockRecords((current) => current.filter((record) => !deletedStockIds.has(record.id)))
+      setDeletedItem({ item, stockRecords: result.stockRecords || [] })
     } catch (error) {
       setPendingDelete(null)
       showToast({ message: error.message })
@@ -564,8 +570,7 @@ export default function StaffMenu() {
       setDeleting(false)
     }
     setPendingDelete(null)
-    setDeletedItem(item)
-    showToast({ message: `${item.name} deleted`, canUndo: true }, 5000)
+    showToast({ message: `${item.name} and its stock records deleted`, canUndo: true }, 5000)
     window.clearTimeout(deletedItemTimer.current)
     deletedItemTimer.current = window.setTimeout(() => setDeletedItem(null), 5000)
   }
@@ -574,8 +579,17 @@ export default function StaffMenu() {
     if (!deletedItem || undoing) return
     setUndoing(true)
     try {
-      const restoredItem = normalizeMenuItem(await menuRequest('create', 'POST', deletedItem))
+      const restoredItem = normalizeMenuItem(await menuRequest('create', 'POST', {
+        ...deletedItem.item,
+        stockRecords: deletedItem.stockRecords,
+      }))
       setItems((current) => (current.some((item) => item.id === restoredItem.id) ? current : [...current, restoredItem]))
+      setStockRecords((current) => [
+        ...current,
+        ...deletedItem.stockRecords
+          .filter((record) => !current.some((existing) => existing.id === record.id))
+          .map(normalizeStockRecord),
+      ])
       showToast({ message: `${restoredItem.name} restored` }, 2500)
     } catch (error) {
       showToast({ message: error.message })
@@ -599,8 +613,14 @@ export default function StaffMenu() {
     }))
   }
 
-  function logout() {
-    if (window.confirm('Are you sure you want to log out?')) navigate('/staff/login')
+  async function logout() {
+    if (!window.confirm('Are you sure you want to log out?')) return
+    try {
+      await logoutStaff()
+      navigate('/staff/login', { replace: true })
+    } catch (error) {
+      window.alert(error.message)
+    }
   }
 
   function navigateSection(name) {
@@ -665,7 +685,7 @@ export default function StaffMenu() {
           </div>
           <div className={adminTw('admin-top-actions')}>
             <StaffMessageInbox />
-            <button type="button" className={adminTw('admin-avatar top-avatar admin-avatar-trigger')} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
+            <button type="button" className={adminTw('admin-avatar top-avatar admin-avatar-trigger')} aria-label="View staff profile for Crumblyx Staff" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>CS</button>
           </div>
         </header>
 

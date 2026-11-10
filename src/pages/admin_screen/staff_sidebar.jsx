@@ -60,16 +60,16 @@ export default function Sidebar({
             <button
               type="button"
               className={adminTw('admin-avatar admin-avatar-trigger')}
-              aria-label="View staff profile for John Doe"
+              aria-label="View staff profile for Crumblyx Staff"
               aria-haspopup="dialog"
               aria-expanded={profileOpen}
               onClick={onOpenProfile}
             >
-              JD
+              CS
             </button>
             <span className={adminTw('admin-user-copy')}>
-              <strong>John Doe</strong>
-              <small>doe@example.com</small>
+              <strong>Crumblyx Staff</strong>
+              <small>admin@crumblyx.com</small>
             </span>
             <button
               type="button"

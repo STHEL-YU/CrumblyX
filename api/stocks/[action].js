@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { query } from '../crumblyx-db.js'
+import { requireStaffSession } from '../staff-auth.js'
 
 function json(response, status, body) {
   response.status(status).json(body)
@@ -20,6 +21,9 @@ export default async function handler(request, response) {
   const { action } = request.query
 
   try {
+    if (!(request.method === 'GET' && (!action || action === 'list'))
+      && !await requireStaffSession(request, response)) return
+
     if (request.method === 'GET' && (!action || action === 'list')) {
       const result = await query(`
         SELECT id, name, category, quantity

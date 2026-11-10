@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "admin:create": "node api/create-admin.js"
   },
   "dependencies": {
     "dotenv": "^18.0.9",

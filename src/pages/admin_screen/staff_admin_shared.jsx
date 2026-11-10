@@ -88,10 +88,10 @@ function StaffProfileDialog({ onClose }) {
           <button className={adminTw("grid size-9 shrink-0 place-items-center rounded-lg text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500")} type="button" aria-label="Close staff profile" onClick={onClose}><DashboardIcon name="close" size={18} /></button>
         </header>
         <div className={adminTw("mt-6 flex items-center gap-4 rounded-xl border border-stone-200 bg-stone-50 p-4")}>
-          <span className={adminTw("staff-profile-avatar grid size-14 shrink-0 place-items-center rounded-full bg-gradient-to-br from-amber-700 to-amber-500 text-base font-bold tracking-wide text-white shadow-sm")} aria-hidden="true">JD</span>
+          <span className={adminTw("staff-profile-avatar grid size-14 shrink-0 place-items-center rounded-full bg-gradient-to-br from-amber-700 to-amber-500 text-base font-bold tracking-wide text-white shadow-sm")} aria-hidden="true">CS</span>
           <div className={adminTw("min-w-0")}>
-            <h3 className={adminTw("truncate text-base font-semibold tracking-tight text-stone-900")}>John Doe</h3>
-            <p className={adminTw("mt-0.5 truncate text-sm text-stone-500")}>doe@example.com</p>
+            <h3 className={adminTw("truncate text-base font-semibold tracking-tight text-stone-900")}>Crumblyx Staff</h3>
+            <p className={adminTw("mt-0.5 truncate text-sm text-stone-500")}>admin@crumblyx.com</p>
             <span className={adminTw("mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700")}>
               <i className={adminTw("size-1.5 rounded-full bg-emerald-500")} aria-hidden="true" />
               Administrator

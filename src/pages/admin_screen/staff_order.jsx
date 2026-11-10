@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardIcon, StaffProfileDialog, StaffSpinner } from "./staff_admin_shared.jsx";
+import { logoutStaff } from "./auth/staff_auth_client.js";
 import Sidebar from "./staff_sidebar.jsx";
 import StaffMessageInbox from "./staff_message_inbox.jsx";
 import { adminTw } from "./staff_admin_tw.js";
@@ -116,7 +117,7 @@ function StatusPill({ status }) {
   );
 }
 
-function OrderCard({ order, onToggleItem, onSelect, onArchive, onRestore, archived, pendingAction, selected }) {
+function OrderCard({ order, onToggleItem, onSelect, onArchive, onRestore, onPermanentDelete, archived, pendingAction, selected }) {
   const totalItems = order.items.length;
   const completedItems = order.items.filter((item) => item.checked).length;
   const progress = totalItems
@@ -254,28 +255,44 @@ function OrderCard({ order, onToggleItem, onSelect, onArchive, onRestore, archiv
           />
         </div>
         {order.status === "completed" && (
-          <button
-            type="button"
-            className={`mt-4 inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${archived ? "border-stone-300 bg-white text-stone-700 hover:bg-stone-100" : "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100"} ${focusRing}`}
-            disabled={Boolean(pendingAction)}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (archived) onRestore(order);
-              else onArchive(order);
-            }}
-          >
-            {pendingAction === `${archived ? "restore" : "archive"}:${order.id}`
-              ? <StaffSpinner className="size-3" />
-              : <DashboardIcon name={archived ? "restore" : "archive"} size={15} />}
-            {archived ? "Restore order" : "Move to archive"}
-          </button>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={`inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${archived ? "border-stone-300 bg-white text-stone-700 hover:bg-stone-100" : "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100"} ${focusRing}`}
+              disabled={Boolean(pendingAction)}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (archived) onRestore(order);
+                else onArchive(order);
+              }}
+            >
+              {pendingAction === `${archived ? "restore" : "archive"}:${order.id}`
+                ? <StaffSpinner className="size-3" />
+                : <DashboardIcon name={archived ? "restore" : "archive"} size={15} />}
+              {archived ? "Restore order" : "Move to archive"}
+            </button>
+            {archived && (
+              <button
+                type="button"
+                className={`inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`}
+                disabled={Boolean(pendingAction)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onPermanentDelete(order);
+                }}
+              >
+                {pendingAction === `delete:${order.id}` ? <StaffSpinner className="size-3" /> : <DashboardIcon name="trash" size={15} />}
+                Permanently delete
+              </button>
+            )}
+          </div>
         )}
       </div>
     </article>
   );
 }
 
-function OrderDetailsPanel({ order, onClose, onAdvance, onArchive, onRestore, archived, pendingAction }) {
+function OrderDetailsPanel({ order, onClose, onAdvance, onArchive, onRestore, onPermanentDelete, archived, pendingAction }) {
   const actionLabel = ACTION_LABELS[order.status];
   const completedItems = order.items.filter((item) => item.checked).length;
   const blocked =
@@ -403,6 +420,16 @@ function OrderDetailsPanel({ order, onClose, onAdvance, onArchive, onRestore, ar
                   ? <><StaffSpinner />Updating archive…</>
                   : <><DashboardIcon name={archived ? "restore" : "archive"} size={16} />{archived ? "Restore order" : "Move to archive"}</>}
               </button>
+              {archived && (
+                <button
+                  type="button"
+                  className={`mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`}
+                  disabled={Boolean(pendingAction)}
+                  onClick={() => onPermanentDelete(order)}
+                >
+                  {pendingAction === `delete:${order.id}` ? <><StaffSpinner />Deleting…</> : <><DashboardIcon name="trash" size={16} />Permanently delete order</>}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -569,15 +596,40 @@ export default function StaffOrders() {
     }
   }
 
+  async function permanentlyDeleteOrder(order) {
+    if (pendingAction) return
+    const confirmed = window.confirm(
+      `Permanently delete order ${order.id}? This cannot be undone.`,
+    )
+    if (!confirmed) return
+
+    setPendingAction(`delete:${order.id}`)
+    try {
+      await orderRequest("permanent-delete", "POST", { id: order.id })
+      setArchivedOrders((current) => current.filter((item) => item.id !== order.id))
+      setSelectedOrder((current) => current?.id === order.id ? null : current)
+      setError("")
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setPendingAction("")
+    }
+  }
+
   function refreshOrders() {
     setLoading(true);
     setError("");
     setRefreshKey((current) => current + 1);
   }
 
-  function logout() {
-    if (window.confirm("Are you sure you want to log out?"))
-      navigate("/staff/login");
+  async function logout() {
+    if (!window.confirm("Are you sure you want to log out?")) return
+    try {
+      await logoutStaff()
+      navigate("/staff/login", { replace: true })
+    } catch (error) {
+      window.alert(error.message)
+    }
   }
 
   function navigateSection(name) {
@@ -657,12 +709,12 @@ export default function StaffOrders() {
               className={adminTw(
                 "admin-avatar top-avatar admin-avatar-trigger",
               )}
-              aria-label="View staff profile for John Doe"
+              aria-label="View staff profile for Crumblyx Staff"
               aria-haspopup="dialog"
               aria-expanded={profileOpen}
               onClick={openProfile}
             >
-              JD
+              CS
             </button>
           </div>
         </header>
@@ -807,6 +859,7 @@ export default function StaffOrders() {
                         onSelect={setSelectedOrder}
                         onArchive={(order) => moveOrderToArchive(order, true)}
                         onRestore={(order) => moveOrderToArchive(order, false)}
+                        onPermanentDelete={permanentlyDeleteOrder}
                         archived={orderView === "archive"}
                         pendingAction={pendingAction}
                         selected={selectedOrder?.id === order.id}
@@ -824,6 +877,7 @@ export default function StaffOrders() {
                     onAdvance={advanceOrder}
                     onArchive={(order) => moveOrderToArchive(order, true)}
                     onRestore={(order) => moveOrderToArchive(order, false)}
+                    onPermanentDelete={permanentlyDeleteOrder}
                     archived={orderView === "archive"}
                     pendingAction={pendingAction}
                   />

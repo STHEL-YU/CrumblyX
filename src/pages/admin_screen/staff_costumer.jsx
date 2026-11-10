@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DashboardIcon, StaffProfileDialog, StaffSpinner } from './staff_admin_shared.jsx'
+import { logoutStaff } from './auth/staff_auth_client.js'
 import Sidebar from './staff_sidebar.jsx'
 import StaffMessageInbox from './staff_message_inbox.jsx'
 import { adminTw } from './staff_admin_tw.js'
@@ -312,8 +313,14 @@ export default function StaffCustomers() {
     return <button className={adminTw("staff-customer-sort")} type="button" onClick={() => sortBy(key)} aria-label={`Sort by ${label}${current ? `, ${sort.direction === 'asc' ? 'ascending' : 'descending'}` : ''}`}>{label}<span aria-hidden="true">{current ? (sort.direction === 'asc' ? '↑' : '↓') : '↕'}</span></button>
   }
 
-  function logout() {
-    if (window.confirm('Are you sure you want to log out?')) navigate('/staff/login')
+  async function logout() {
+    if (!window.confirm('Are you sure you want to log out?')) return
+    try {
+      await logoutStaff()
+      navigate('/staff/login', { replace: true })
+    } catch (error) {
+      window.alert(error.message)
+    }
   }
 
   function navigateSection(name) {
@@ -342,7 +349,7 @@ export default function StaffCustomers() {
           </div>
           <div className={adminTw("admin-top-actions")}>
             <StaffMessageInbox />
-            <button type="button" className={adminTw("admin-avatar top-avatar admin-avatar-trigger")} aria-label="View staff profile for John Doe" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>JD</button>
+            <button type="button" className={adminTw("admin-avatar top-avatar admin-avatar-trigger")} aria-label="View staff profile for Crumblyx Staff" aria-haspopup="dialog" aria-expanded={profileOpen} onClick={openProfile}>CS</button>
           </div>
         </header>
 

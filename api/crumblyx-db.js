@@ -113,6 +113,27 @@ export async function createCustomersTable() {
   `)
 }
 
+export async function createStaffAuthTables() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS staff_accounts (
+      id TEXT PRIMARY KEY,
+      email VARCHAR(255) NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+  await query(`
+    CREATE TABLE IF NOT EXISTS staff_sessions (
+      token_hash TEXT PRIMARY KEY,
+      staff_id TEXT NOT NULL REFERENCES staff_accounts(id) ON DELETE CASCADE,
+      expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+  await query('CREATE INDEX IF NOT EXISTS staff_sessions_expiry_idx ON staff_sessions (expires_at)')
+}
+
 export async function createMessagesTable() {
   await createCustomersTable()
   await query(`
@@ -266,6 +287,7 @@ if (isDirectScript) {
     await createStockTable()
     await createDiningTablesTable()
     await createCustomersTable()
+    await createStaffAuthTables()
     await createMessagesTable()
     await createOrdersTable()
     console.log('menu_items, stock_items, dining_tables, customers, messages, and orders tables created successfully')
