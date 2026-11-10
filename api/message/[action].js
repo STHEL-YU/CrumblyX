@@ -45,6 +45,7 @@ export default async function handler(request, response) {
 		const staffAction = (request.method === 'GET' && action === 'conversations')
 			|| (request.method === 'POST' && action === 'send' && request.body?.senderType === 'staff')
 			|| (request.method === 'PUT' && action === 'read' && request.body?.readerType === 'staff')
+			|| (request.method === 'DELETE' && action === 'conversation')
 		if (staffAction && !await requireStaffSession(request, response)) return
 
 		if (request.method === 'GET' && action === 'list') {
@@ -122,6 +123,19 @@ export default async function handler(request, response) {
 				WHERE customer_id = $1 AND sender_type <> $2 AND read_at IS NULL
 			`, [customerId.trim(), readerType])
 			return json(response, 200, { updated: result.rowCount })
+		}
+
+		if (request.method === 'DELETE' && action === 'conversation') {
+			const customerId = request.body?.customerId
+			if (typeof customerId !== 'string' || !customerId.trim()) {
+				throw new RequestError(400, 'Customer id is required.')
+			}
+			const result = await query(
+				'DELETE FROM messages WHERE customer_id = $1 RETURNING id',
+				[customerId.trim()],
+			)
+			if (result.rowCount === 0) throw new RequestError(404, 'Conversation not found.')
+			return json(response, 200, { deleted: true, customerId: customerId.trim(), deletedMessages: result.rowCount })
 		}
 
 		return json(response, 405, { error: 'Method not allowed.' })

@@ -96,26 +96,24 @@ export default async function handler(request, response) {
 
 		if (request.method === 'POST' && action === 'register') {
 			const credentials = validateCredentials(request.body, true)
-			const phone = typeof request.body.phone === 'string' ? request.body.phone.trim() : ''
-			const location = typeof request.body.location === 'string' ? request.body.location.trim() : ''
-			if (!/^09\d{2}\s?\d{3}\s?\d{4}$/.test(phone)) {
-				throw new RequestError(400, 'Enter a valid PH mobile number, such as 0917 123 4567.')
-			}
-			if (!location || location.length > 120) {
-				throw new RequestError(400, 'Enter your address or location (up to 120 characters).')
-			}
+			// const phone = typeof request.body.phone === 'string' ? request.body.phone.trim() : ''
+			// const location = typeof request.body.location === 'string' ? request.body.location.trim() : ''
+			// if (!/^09\d{2}\s?\d{3}\s?\d{4}$/.test(phone)) {
+			// 	throw new RequestError(400, 'Enter a valid PH mobile number, such as 0917 123 4567.')
+			// }
+			// if (!location || location.length > 120) {
+			// 	throw new RequestError(400, 'Enter your address or location (up to 120 characters).')
+			// }
 			const passwordHash = await hashPassword(credentials.password)
 			const result = await query(`
-				INSERT INTO customers (id, name, email, password_hash, phone, location, status)
-				VALUES ($1, $2, $3, $4, $5, $6, 'active')
-				RETURNING id, name, email, phone, location, status
+				INSERT INTO customers (id, name, email, password_hash, status)
+				VALUES ($1, $2, $3, $4, 'active')
+				RETURNING id, name, email,status
 			`, [
 				randomUUID(),
 				credentials.name,
 				credentials.email,
 				passwordHash,
-				phone,
-				location,
 			])
 			return json(response, 201, { customer: result.rows[0] })
 		}

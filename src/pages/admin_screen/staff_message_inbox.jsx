@@ -39,6 +39,7 @@ export default function StaffMessageInbox() {
   const [loadingConversations, setLoadingConversations] = useState(true)
   const [loadingMessages, setLoadingMessages] = useState(true)
   const [sending, setSending] = useState(false)
+  const [deletingCustomerId, setDeletingCustomerId] = useState('')
   const [error, setError] = useState('')
   const messagesEndRef = useRef(null)
   const conversationsRef = useRef(conversations)
@@ -170,6 +171,35 @@ export default function StaffMessageInbox() {
     }
   }
 
+  async function deleteConversation(conversation) {
+    if (deletingCustomerId || (sending && selectedCustomerId === conversation.customerId)) return
+    const confirmed = window.confirm(
+      `Delete the conversation with ${conversation.name || conversation.email || 'this customer'}? This removes its messages and cannot be undone.`,
+    )
+    if (!confirmed) return
+
+    setDeletingCustomerId(conversation.customerId)
+    setError('')
+    try {
+      await messageRequest(
+        'conversation',
+        'DELETE',
+        { customerId: conversation.customerId },
+      )
+      setConversations((current) => current.filter((item) => item.customerId !== conversation.customerId))
+      if (selectedCustomerId === conversation.customerId) {
+        setSelectedCustomerId('')
+        setMessages([])
+        setDraft('')
+        setLoadingMessages(false)
+      }
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setDeletingCustomerId('')
+    }
+  }
+
   return (
     <>
       <button
@@ -206,26 +236,42 @@ export default function StaffMessageInbox() {
                 {loadingConversations && conversations.length === 0 && <p className="px-4 py-5 text-sm text-stone-500">Loading conversations…</p>}
                 {!loadingConversations && conversations.length === 0 && <p className="px-4 py-5 text-sm text-stone-500">No customer messages yet.</p>}
                 {conversations.map((conversation) => (
-                  <button
-                    className={`w-full border-b border-stone-100 px-5 py-4 text-left transition hover:bg-stone-50 ${selectedCustomerId === conversation.customerId ? 'bg-amber-50' : 'bg-white'}`}
-                    type="button"
+                  <div
+                    className={`flex items-stretch border-b border-stone-100 ${selectedCustomerId === conversation.customerId ? 'bg-amber-50' : 'bg-white'}`}
                     key={conversation.customerId}
-                    onClick={() => {
-                      setLoadingMessages(true)
-                      setMessages([])
-                      setSelectedCustomerId(conversation.customerId)
-                    }}
                   >
-                    <span className="flex items-start justify-between gap-2">
-                      <strong className="truncate text-sm font-bold text-stone-900">{conversation.name || 'Customer'}</strong>
-                      {conversation.unreadCount > 0 && <span className="grid min-w-5 place-items-center rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{conversation.unreadCount}</span>}
-                    </span>
-                    <span className="mt-0.5 block truncate text-xs text-stone-500">{conversation.email}</span>
-                    <span className="mt-2 block truncate text-xs text-stone-600">{conversation.preview}</span>
-                    {conversation.orderId
-                      ? <span className="mt-2 block text-[10px] font-semibold text-amber-900">Order #{conversation.orderId} · {ORDER_STATUS_LABELS[conversation.orderStatus] || conversation.orderStatus}{conversation.orderMode === 'dine-in' && conversation.tableNumber ? ` · Table ${conversation.tableNumber}` : ''}</span>
-                      : <span className="mt-2 block text-[10px] text-stone-400">No linked order</span>}
-                  </button>
+                    <button
+                      className="min-w-0 flex-1 px-5 py-4 text-left transition hover:bg-stone-50"
+                      type="button"
+                      onClick={() => {
+                        setLoadingMessages(true)
+                        setMessages([])
+                        setSelectedCustomerId(conversation.customerId)
+                      }}
+                    >
+                      <span className="flex items-start justify-between gap-2">
+                        <strong className="truncate text-sm font-bold text-stone-900">{conversation.name || 'Customer'}</strong>
+                        {conversation.unreadCount > 0 && <span className="grid min-w-5 place-items-center rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{conversation.unreadCount}</span>}
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs text-stone-500">{conversation.email}</span>
+                      <span className="mt-2 block truncate text-xs text-stone-600">{conversation.preview}</span>
+                      {conversation.orderId
+                        ? <span className="mt-2 block text-[10px] font-semibold text-amber-900">Order #{conversation.orderId} · {ORDER_STATUS_LABELS[conversation.orderStatus] || conversation.orderStatus}{conversation.orderMode === 'dine-in' && conversation.tableNumber ? ` · Table ${conversation.tableNumber}` : ''}</span>
+                        : <span className="mt-2 block text-[10px] text-stone-400">No linked order</span>}
+                    </button>
+                    <button
+                      className="grid w-12 shrink-0 place-items-center text-stone-400 transition hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rose-500 disabled:cursor-wait disabled:opacity-50"
+                      type="button"
+                      aria-label={`Delete conversation with ${conversation.name || conversation.email || 'customer'}`}
+                      title="Delete conversation"
+                      disabled={Boolean(deletingCustomerId) || (sending && selectedCustomerId === conversation.customerId)}
+                      onClick={() => deleteConversation(conversation)}
+                    >
+                      {deletingCustomerId === conversation.customerId
+                        ? <StaffSpinner className="size-4" />
+                        : <DashboardIcon name="trash" size={17} />}
+                    </button>
+                  </div>
                 ))}
               </div>
             </aside>
