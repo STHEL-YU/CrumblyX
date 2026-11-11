@@ -4,6 +4,12 @@ import { requireStaffSession } from '../staff-auth.js'
 
 const ORDER_STATUSES = ['new', 'preparing', 'ready', 'completed']
 const ADD_ON_PRICES = { caramel: 30, cream: 25, oat: 25 }
+const JUICE_ADD_ON_PRICES = {
+  nata: 15,
+  'basil-seeds': 15,
+  'extra-fruit': 20,
+  honey: 10,
+}
 let archiveSchemaReady
 
 class RequestError extends Error {
@@ -101,6 +107,12 @@ async function countOrders(response) {
   return json(response, 200, { counts })
 }
 
+function validAddonIds(addonIds, prices) {
+  return Array.isArray(addonIds)
+    && addonIds.every((id) => Object.hasOwn(prices, id))
+    && new Set(addonIds).size === addonIds.length
+}
+
 function validateCreateBody(body) {
   if (!body || !Array.isArray(body.items) || body.items.length === 0 || body.items.length > 50) {
     throw new RequestError(400, 'At least one valid order item is required.')
@@ -118,12 +130,15 @@ function validateCreateBody(body) {
       || (item.customizationData != null && (
         typeof item.customizationData !== 'object'
         || Array.isArray(item.customizationData)
-        || !['ICED', 'HOT'].includes(item.customizationData.coffeeType)
-        || !['SMALL', 'MEDIUM', 'LARGE'].includes(item.customizationData.cupSize)
-        || !['0%', '25%', '50%', '75%', '100%'].includes(item.customizationData.sugar)
-        || !Array.isArray(item.customizationData.addonIds)
-        || item.customizationData.addonIds.some((id) => !Object.hasOwn(ADD_ON_PRICES, id))
-        || new Set(item.customizationData.addonIds).size !== item.customizationData.addonIds.length
+        || (item.customizationData.drinkType != null
+          && !['COFFEE', 'JUICE'].includes(item.customizationData.drinkType))
+        || (item.customizationData.drinkType === 'JUICE'
+          ? !['SMALL', 'MEDIUM', 'LARGE'].includes(item.customizationData.cupSize)
+            || !validAddonIds(item.customizationData.addonIds, JUICE_ADD_ON_PRICES)
+          : !['ICED', 'HOT'].includes(item.customizationData.coffeeType)
+            || !['SMALL', 'MEDIUM', 'LARGE'].includes(item.customizationData.cupSize)
+            || !['0%', '25%', '50%', '75%', '100%'].includes(item.customizationData.sugar)
+            || !validAddonIds(item.customizationData.addonIds, ADD_ON_PRICES))
       ))) {
       throw new RequestError(400, 'Order items must include a valid product and quantity.')
     }
@@ -188,8 +203,18 @@ async function createOrder(body, response) {
           throw new RequestError(400, `${product.name} does not support customizations.`)
         }
         const sizeAdjustments = { SMALL: -20, MEDIUM: 0, LARGE: 30 }
-        unitPrice += sizeAdjustments[item.customizationData.cupSize]
-          + item.customizationData.addonIds.reduce((sum, id) => sum + ADD_ON_PRICES[id], 0)
+        const customizationData = item.customizationData
+        if (customizationData.drinkType === 'JUICE') {
+          unitPrice += sizeAdjustments[customizationData.cupSize]
+            + customizationData.addonIds.reduce(
+              (sum, id) => sum + JUICE_ADD_ON_PRICES[id],
+              0,
+            )
+        } else {
+          unitPrice += sizeAdjustments[customizationData.cupSize]
+            + (customizationData.coffeeType === 'ICED' ? 10 : 0)
+            + customizationData.addonIds.reduce((sum, id) => sum + ADD_ON_PRICES[id], 0)
+        }
       }
       return {
         id: randomUUID(),

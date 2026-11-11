@@ -109,7 +109,11 @@ export default function AppLayout() {
                     name: sessionStorage.getItem('crumblyx-customer-name') || '',
                     email: sessionStorage.getItem('crumblyx-customer-email') || '',
                   }}
-                  onDineIn={() => navigate('/scan-table')}
+                  onDineIn={(destination) => navigate(
+                    destination.type === 'booking'
+                      ? `/book-table?id=${encodeURIComponent(destination.id)}`
+                      : `/home?mode=dine-in&table=${encodeURIComponent(destination.tableName)}`,
+                  )}
                   onTakeout={() => navigate('/home?mode=takeout')}
                 />
               </CustomerAuthScene>

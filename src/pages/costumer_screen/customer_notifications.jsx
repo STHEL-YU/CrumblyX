@@ -4,7 +4,7 @@ import { Icon } from '../../components/customer_ui.jsx'
 const ORDER_STATUS_LABELS = {
   new: 'Order placed',
   preparing: 'Preparing',
-  ready: 'Ready',
+  ready: 'Ready your Payment',
   completed: 'Completed',
 }
 

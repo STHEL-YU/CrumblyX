@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DashboardIcon, StaffProfileDialog, StaffSpinner } from './staff_admin_shared.jsx'
 import { logoutStaff } from './auth/staff_auth_client.js'
@@ -201,6 +201,9 @@ function NotesWidget({ date, notes, onAdd, onToggle, onRemove }) {
 export default function StaffDashboard() {
   const [orders, setOrders] = useState([])
   const [stocks, setStocks] = useState([])
+  const [assistanceCalls, setAssistanceCalls] = useState([])
+  const [assistanceError, setAssistanceError] = useState('')
+  const [callSoundsEnabled, setCallSoundsEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [filter, setFilter] = useState('all')
@@ -216,8 +219,36 @@ export default function StaffDashboard() {
   const [stockLoading, setStockLoading] = useState(true)
   const [stockError, setStockError] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const seenAssistanceCallsRef = useRef(null)
+  const audioContextRef = useRef(null)
+  const callSoundsEnabledRef = useRef(false)
   const { profileOpen, openProfile, closeProfile } = useStaffProfile()
   const navigate = useNavigate()
+
+  function playAssistanceChime() {
+    const context = audioContextRef.current
+    if (!context || context.state !== 'running') return
+
+    const startTime = context.currentTime
+    const duration = 3.3
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    oscillator.type = 'sine'
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+
+    for (let index = 0; index < 7; index += 1) {
+      const start = startTime + index * 0.5
+      gain.gain.setValueAtTime(0.0001, start)
+      gain.gain.exponentialRampToValueAtTime(0.18, start + 0.025)
+      gain.gain.setValueAtTime(0.18, start + 0.24)
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.32)
+      oscillator.frequency.setValueAtTime(index % 2 === 0 ? 880 : 1175, start)
+    }
+
+    oscillator.start(startTime)
+    oscillator.stop(startTime + duration)
+  }
 
   useEffect(() => {
     let active = true
@@ -270,6 +301,76 @@ export default function StaffDashboard() {
       window.clearInterval(interval)
     }
   }, [])
+
+  useEffect(() => {
+    let active = true
+    let refreshing = false
+    let controller
+
+    async function refreshAssistanceCalls() {
+      if (refreshing) return
+      refreshing = true
+      controller = new AbortController()
+      try {
+        const data = await fetchJson('/api/assistance/list', controller.signal)
+        if (!Array.isArray(data.calls)) throw new Error('Assistance calls response was invalid.')
+
+        if (active) {
+          const currentIds = new Set(data.calls.map((call) => call.id))
+          const previousIds = seenAssistanceCallsRef.current
+          if (previousIds && callSoundsEnabledRef.current) {
+            const hasNewCalls = [...currentIds].some((id) => !previousIds.has(id))
+            if (hasNewCalls) playAssistanceChime()
+          }
+          seenAssistanceCallsRef.current = currentIds
+          setAssistanceCalls(data.calls)
+          setAssistanceError('')
+        }
+      } catch (error) {
+        if (active && error.name !== 'AbortError') setAssistanceError(error.message)
+      } finally {
+        refreshing = false
+      }
+    }
+
+    refreshAssistanceCalls()
+    const interval = window.setInterval(refreshAssistanceCalls, 5000)
+    return () => {
+      active = false
+      controller?.abort()
+      window.clearInterval(interval)
+    }
+  }, [])
+
+  async function enableCallSounds() {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new window.AudioContext()
+      }
+      await audioContextRef.current.resume()
+      callSoundsEnabledRef.current = true
+      setCallSoundsEnabled(true)
+      setAssistanceError('')
+    } catch (error) {
+      setAssistanceError(`Call sounds could not be enabled: ${error.message}`)
+    }
+  }
+
+  async function markCallAssisted(callId) {
+    try {
+      const response = await fetch('/api/assistance/assisted', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: callId }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Could not clear the assistance call.')
+      setAssistanceCalls((calls) => calls.filter((call) => call.id !== callId))
+      setAssistanceError('')
+    } catch (error) {
+      setAssistanceError(error.message)
+    }
+  }
 
   function saveNotes(nextNotes) {
     setNotes(nextNotes)
@@ -392,6 +493,58 @@ export default function StaffDashboard() {
 
             {loadError && <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">{loadError} Showing the latest available data.</p>}
 
+            <section className="overflow-hidden rounded-2xl border border-rose-200 bg-white shadow-sm" aria-labelledby="dashboard-assistance-title">
+              <header className="flex flex-wrap items-center justify-between gap-3 border-b border-rose-100 bg-rose-50/70 px-5 py-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-rose-700">Guest requests</p>
+                  <h2 id="dashboard-assistance-title" className="mt-1 text-lg font-bold tracking-tight text-stone-900">Call for assistance</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={enableCallSounds}
+                  disabled={callSoundsEnabled}
+                  className="min-h-10 rounded-xl border border-rose-200 bg-white px-3 text-sm font-semibold text-rose-800 transition hover:bg-rose-100 disabled:cursor-default disabled:opacity-70"
+                >
+                  {callSoundsEnabled ? 'Call sounds enabled' : 'Enable call sounds'}
+                </button>
+              </header>
+              {assistanceError && <p className="m-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert">{assistanceError}</p>}
+              {assistanceCalls.length > 0 ? (
+                <ul className="divide-y divide-stone-100" aria-live="assertive">
+                  {assistanceCalls.map((call) => (
+                    <li key={call.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <span className="relative grid size-10 place-items-center rounded-full bg-rose-100 text-rose-700">
+                          <DashboardIcon name="orders" size={18} />
+                          <i className="absolute right-0 top-0 size-2.5 animate-ping rounded-full bg-rose-500" aria-hidden="true" />
+                        </span>
+                        <div>
+                          <p className="m-0 font-bold text-stone-900">
+                            {call.tableNumber.toLocaleLowerCase().startsWith('table')
+                              ? call.tableNumber
+                              : `Table ${call.tableNumber}`}
+                            {' needs assistance'}
+                          </p>
+                          <time className="mt-1 block text-xs text-stone-500" dateTime={call.createdAt}>
+                            Called {new Date(call.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                          </time>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => markCallAssisted(call.id)}
+                        className="min-h-10 rounded-xl bg-rose-700 px-4 text-sm font-semibold text-white transition hover:bg-rose-800"
+                      >
+                        Mark assisted
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="m-0 px-5 py-4 text-sm text-stone-500">No tables are waiting for assistance.</p>
+              )}
+            </section>
+
             <section className="sd-kpi" aria-label="Daily key metrics">
               <SummaryCard label="Completed sales" value={loading ? '—' : formatPeso(totalSales)} caption="Selected date · completed orders" icon="orders" tone="bg-emerald-50 text-emerald-700" />
               <SummaryCard label="New orders" value={loading ? '—' : newOrders} caption="Awaiting acceptance" icon="plus" tone="bg-amber-50 text-amber-700" />
@@ -466,33 +619,7 @@ export default function StaffDashboard() {
 
               {/* Right column: inventory + quick info */}
               <aside className="sd-right">
-                <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm" aria-labelledby="dashboard-stock-title">
-                  <header className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-700">Inventory</p>
-                      <h2 id="dashboard-stock-title" className="mt-1 text-lg font-bold tracking-tight text-stone-900">Needs attention <span className="text-sm font-semibold text-stone-500">({stockLoading || stockError ? '—' : lowStock.length})</span></h2>
-                    </div>
-                    <span className={`grid size-10 place-items-center rounded-xl ${stockError || lowStock.length ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}><DashboardIcon name={stockError || lowStock.length ? 'warning' : 'checkCircle'} size={19} /></span>
-                  </header>
-                  {stockLoading ? (
-                    <p className="mt-4 rounded-xl bg-stone-50 px-3 py-3 text-sm text-stone-600" role="status">Loading live stock levels…</p>
-                  ) : stockError ? (
-                    <p className="mt-4 rounded-xl bg-rose-50 px-3 py-3 text-sm text-rose-800" role="alert">Could not load stock levels: {stockError}</p>
-                  ) : lowStock.length ? (
-                    <ul className="mt-4 grid gap-2">
-                      {lowStock.slice(0, 5).map((item) => (
-                        <li key={item.id} className="flex items-center justify-between gap-3 rounded-xl bg-stone-50 px-3 py-2.5">
-                          <span className="min-w-0 truncate text-sm font-medium text-stone-700">{item.name}</span>
-                          <span className={`shrink-0 text-xs font-semibold ${item.quantity === 0 ? 'text-rose-700' : 'text-amber-700'}`}>{item.quantity === 0 ? 'Out' : `${item.quantity} left`}</span>
-                        </li>
-                      ))}
-                      {lowStock.length > 5 && <li className="px-3 text-xs font-medium text-stone-500">And {lowStock.length - 5} more items need attention</li>}
-                    </ul>
-                  ) : (
-                    <p className="mt-4 rounded-xl bg-emerald-50 px-3 py-3 text-sm text-emerald-800">No low-stock items right now.</p>
-                  )}
-                  <button type="button" className="mt-4 text-sm font-semibold text-amber-800 transition hover:text-amber-950" onClick={() => navigate('/staff/stocks')}>Review inventory <span aria-hidden="true">→</span></button>
-                </section>
+
 
                 <section className="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-5 shadow-sm" aria-labelledby="dashboard-quick-title">
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-700">Quick info</p>

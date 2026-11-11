@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import jsQR from "jsqr";
 import { Icon, Logo } from "../../components/customer_ui.jsx";
+import { getTableDestination } from "./table_qr.js";
 
 function QrScanner({ onResult, onCancel }) {
   const videoRef = useRef(null);
@@ -194,10 +195,17 @@ function QrScanner({ onResult, onCancel }) {
 
 export default function CosOrderType({ onDineIn, onTakeout }) {
   const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState("");
 
   function handleScanResult(value) {
+    const destination = getTableDestination(value);
     setScanning(false);
-    onDineIn(value);
+    if (!destination) {
+      setScanError("This QR code does not contain valid table information. Please scan the table QR code.");
+      return;
+    }
+    setScanError("");
+    onDineIn(destination);
   }
 
   const options = [
@@ -206,7 +214,10 @@ export default function CosOrderType({ onDineIn, onTakeout }) {
       icon: "qr",
       title: "Dine In",
       text: "Scan the QR code at your table",
-      onClick: () => setScanning(true),
+      onClick: () => {
+        setScanError("");
+        setScanning(true);
+      },
     },
     {
       key: "take",
@@ -256,6 +267,11 @@ export default function CosOrderType({ onDineIn, onTakeout }) {
             <p className="order-type-subtitle mb-7 mt-2 text-center text-[0.95rem] font-medium opacity-65">
               Choose dine-in or takeout to continue.
             </p>
+            {scanError && (
+              <p className="auth-error mb-4 mt-0" role="alert">
+                {scanError}
+              </p>
+            )}
 
             <div className="flex flex-col gap-3.5">
               {options.map((option, index) => (

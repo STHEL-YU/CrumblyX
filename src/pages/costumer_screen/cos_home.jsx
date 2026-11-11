@@ -65,10 +65,24 @@ function getAvailableProducts(menuItems, stockRecords) {
     }));
 }
 
-const addons = [
+const coffeeAddons = [
   { id: "caramel", name: "Extra Caramel Shot", price: 30 },
   { id: "cream", name: "Whipped Cream", price: 25 },
   { id: "oat", name: "Oat Milk Upgrade", price: 25 },
+];
+
+const juiceAddons = [
+  { id: "nata", name: "Nata de Coco", price: 15 },
+  { id: "basil-seeds", name: "Basil Seeds", price: 15 },
+  { id: "extra-fruit", name: "Extra Fruit", price: 20 },
+  { id: "honey", name: "Honey", price: 10 },
+];
+
+const mealAddons = [
+  { id: "extra-rice", name: "Extra Rice", price: 15 },
+  { id: "java-rice", name: "Java Rice", price: 20 },
+  { id: "egg", name: "Egg", price: 15 },
+  { id: "water", name: "Water", price: 15 },
 ];
 
 export default function CosHome() {
@@ -85,6 +99,8 @@ export default function CosHome() {
   const [cartOpen, setCartOpen] = useState(false);
   const [orderSubmitting, setOrderSubmitting] = useState(false);
   const [orderError, setOrderError] = useState("");
+  const [assistanceSubmitting, setAssistanceSubmitting] = useState(false);
+  const [assistanceMessage, setAssistanceMessage] = useState("");
   const [trackedOrders, setTrackedOrders] = useState([]);
   const [trackedOrdersLoaded, setTrackedOrdersLoaded] = useState(false);
   const [trackingOrder, setTrackingOrder] = useState(null);
@@ -111,10 +127,11 @@ export default function CosHome() {
   const orderSwipeStartX = useRef(null);
   const [trackedOrdersError, setTrackedOrdersError] = useState("");
   const [quantity, setQuantity] = useState(1);
+  const [drinkKind, setDrinkKind] = useState("COFFEE");
   const [coffeeType, setCoffeeType] = useState("ICED");
   const [cupSize, setCupSize] = useState("MEDIUM");
   const [sugar, setSugar] = useState("50%");
-  const [pastrySize, setPastrySize] = useState("REGULAR");
+  const [mealSize, setMealSize] = useState("REGULAR");
   const [spice, setSpice] = useState("NOT SPICY");
   const [selectedAddons, setSelectedAddons] = useState([]);
   const [instruction, setInstruction] = useState("");
@@ -187,18 +204,37 @@ export default function CosHome() {
     [category, products],
   );
   const categoryOptions = ["All Items", "Pastries", "Meals", "Beverages"];
+  const availableAddons = selected?.isMeal
+    ? mealAddons
+    : drinkKind === "JUICE"
+      ? juiceAddons
+      : coffeeAddons;
   const addonTotal = selectedAddons.reduce(
     (sum, addonId) =>
-      sum + (addons.find((addon) => addon.id === addonId)?.price || 0),
+      sum + (availableAddons.find((addon) => addon.id === addonId)?.price || 0),
     0,
   );
   const sizeAdjustment =
     cupSize === "SMALL" ? -20 : cupSize === "LARGE" ? 30 : 0;
+  const mealSizeAdjustment =
+    mealSize === "SMALL" ? -20 : mealSize === "LARGE" ? 30 : 0;
+  const spiceAdjustment = spice === "SPICY" ? 5 : 0;
+  const temperatureAdjustment =
+    selected?.isBeverage && drinkKind === "COFFEE" && coffeeType === "ICED"
+      ? 10
+      : 0;
   const unitTotal = selected
     ? Math.max(
         0,
         selected.price +
-          (selected.isBeverage ? addonTotal + sizeAdjustment : 0),
+          (selected.isBeverage
+            ? addonTotal +
+              (drinkKind === "COFFEE"
+                ? sizeAdjustment + temperatureAdjustment
+                : 0)
+            : selected.isMeal
+              ? mealSizeAdjustment + spiceAdjustment + addonTotal
+              : 0),
       )
     : 0;
   const orderTotal = unitTotal * quantity;
@@ -220,10 +256,11 @@ export default function CosHome() {
   function startItem(product) {
     setSelected(product);
     setQuantity(1);
+    setDrinkKind("COFFEE");
     setCoffeeType("ICED");
     setCupSize("MEDIUM");
     setSugar("50%");
-    setPastrySize("REGULAR");
+    setMealSize("REGULAR");
     setSpice("NOT SPICY");
     setSelectedAddons([]);
     setInstruction("");
@@ -235,27 +272,38 @@ export default function CosHome() {
     let customizationData = null;
 
     if (selected.isBeverage) {
+      const addonNames = selectedAddons.map(
+        (addonId) =>
+          availableAddons.find((addon) => addon.id === addonId)?.name,
+      );
       customization = [
-        coffeeType.toLowerCase(),
+        drinkKind.toLowerCase(),
+        ...(drinkKind === "COFFEE"
+          ? [coffeeType.toLowerCase(), `${sugar} sugar`]
+          : []),
         cupSize.toLowerCase(),
-        `${sugar} sugar`,
-        ...selectedAddons.map(
-          (addonId) => addons.find((addon) => addon.id === addonId)?.name,
-        ),
+        ...addonNames,
         instruction.trim(),
       ]
         .filter(Boolean)
         .join(", ");
       customizationData = {
-        coffeeType,
+        drinkType: drinkKind,
         cupSize,
-        sugar,
         addonIds: selectedAddons,
+        ...(drinkKind === "COFFEE" ? { coffeeType, sugar } : {}),
       };
     } else {
       customization = [
-        pastrySize.toLowerCase(),
-        spice.toLowerCase(),
+        ...(selected.isMeal
+          ? [mealSize.toLowerCase(), spice.toLowerCase()]
+          : []),
+        ...(selected.isMeal
+          ? selectedAddons.map(
+              (addonId) =>
+                availableAddons.find((addon) => addon.id === addonId)?.name,
+            )
+          : []),
         instruction.trim(),
       ]
         .filter(Boolean)
@@ -428,7 +476,8 @@ export default function CosHome() {
   }
 
   function finishOrderSwipe(order, event) {
-    if (order.status !== "completed" || orderSwipeStartX.current == null) return;
+    if (order.status !== "completed" || orderSwipeStartX.current == null)
+      return;
     const distance = event.changedTouches[0].clientX - orderSwipeStartX.current;
     orderSwipeStartX.current = null;
     if (Math.abs(distance) >= 80) dismissCompletedOrder(order);
@@ -440,6 +489,32 @@ export default function CosHome() {
     sessionStorage.removeItem("crumblyx-customer-email");
     sessionStorage.removeItem("crumblyx-takeout-details");
     navigate("/login", { replace: true });
+  }
+
+  async function callStaff() {
+    if (orderMode !== "dine-in" || !tableNumber || assistanceSubmitting) return;
+    setAssistanceSubmitting(true);
+    setAssistanceMessage("");
+    try {
+      const response = await fetch("/api/assistance/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tableNumber }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Could not call staff. Please try again.",
+        );
+      }
+      setAssistanceMessage(
+        `Staff has been notified for ${formatTableLabel(tableNumber)}.`,
+      );
+    } catch (error) {
+      setAssistanceMessage(error.message);
+    } finally {
+      setAssistanceSubmitting(false);
+    }
   }
 
   const navItems = [
@@ -530,6 +605,17 @@ export default function CosHome() {
               <span className="online-dot relative h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500">
                 <span className="absolute inset-0 animate-ping rounded-full bg-emerald-500 opacity-60" />
               </span>
+              {orderMode === "dine-in" && tableNumber && (
+                <button
+                  type="button"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-amber-800 disabled:cursor-wait disabled:opacity-60"
+                  onClick={callStaff}
+                  disabled={assistanceSubmitting}
+                >
+                  <Icon name="bell" size={18} />
+                  {assistanceSubmitting ? "Calling staff..." : "Call staff"}
+                </button>
+              )}
             </section>
 
             <section
@@ -738,26 +824,39 @@ export default function CosHome() {
                     {selected.isBeverage ? (
                       <>
                         <OptionGroup
-                          label="TYPE OF COFFEE"
-                          options={["ICED", "HOT"]}
-                          value={coffeeType}
-                          onChange={setCoffeeType}
+                          label="TYPE OF DRINK"
+                          options={["COFFEE", "JUICE"]}
+                          value={drinkKind}
+                          onChange={(value) => {
+                            setDrinkKind(value);
+                            setSelectedAddons([]);
+                          }}
                         />
+                        {drinkKind === "COFFEE" && (
+                          <>
+                            <OptionGroup
+                              label="TYPE OF COFFEE"
+                              options={["ICED", "HOT"]}
+                              value={coffeeType}
+                              onChange={setCoffeeType}
+                            />
+                            <OptionGroup
+                              label="SUGAR LEVEL"
+                              options={["0%", "25%", "50%", "75%", "100%"]}
+                              value={sugar}
+                              onChange={setSugar}
+                            />
+                          </>
+                        )}
                         <OptionGroup
                           label="CUP SIZE"
                           options={["SMALL", "MEDIUM", "LARGE"]}
                           value={cupSize}
                           onChange={setCupSize}
                         />
-                        <OptionGroup
-                          label="SUGAR LEVEL"
-                          options={["0%", "25%", "50%", "75%", "100%"]}
-                          value={sugar}
-                          onChange={setSugar}
-                        />
                         <fieldset className="addon-group">
                           <legend>ADD ONS</legend>
-                          {addons.map((addon) => (
+                          {availableAddons.map((addon) => (
                             <label className="addon-row" key={addon.id}>
                               <input
                                 type="checkbox"
@@ -770,13 +869,13 @@ export default function CosHome() {
                           ))}
                         </fieldset>
                       </>
-                    ) : (
+                    ) : selected.isMeal ? (
                       <>
                         <OptionGroup
                           label="SIZE"
                           options={["SMALL", "REGULAR", "LARGE"]}
-                          value={pastrySize}
-                          onChange={setPastrySize}
+                          value={mealSize}
+                          onChange={setMealSize}
                         />
                         <OptionGroup
                           label="SPICE LEVEL"
@@ -784,8 +883,22 @@ export default function CosHome() {
                           value={spice}
                           onChange={setSpice}
                         />
+                        <fieldset className="addon-group">
+                          <legend>ADD ONS</legend>
+                          {mealAddons.map((addon) => (
+                            <label className="addon-row" key={addon.id}>
+                              <input
+                                type="checkbox"
+                                checked={selectedAddons.includes(addon.id)}
+                                onChange={() => toggleAddon(addon.id)}
+                              />
+                              <span>{addon.name}</span>
+                              <strong>+ ₱ {addon.price}</strong>
+                            </label>
+                          ))}
+                        </fieldset>
                       </>
-                    )}
+                    ) : null}
                     <label className="instruction-field">
                       <span>SPECIAL INSTRUCTION</span>
                       <textarea
@@ -793,7 +906,9 @@ export default function CosHome() {
                         onChange={(event) => setInstruction(event.target.value)}
                         placeholder={
                           selected.isBeverage
-                            ? "E.g. no sugar on top, extra hot, allergy notes..."
+                            ? drinkKind === "JUICE"
+                              ? "E.g. less sweet, no ice, allergy notes..."
+                              : "E.g. no sugar on top, extra hot, allergy notes..."
                             : selected.isMeal
                               ? "E.g. no onions, extra rice, allergy notes..."
                               : "E.g. warm it up, cut in half, allergy notes..."
@@ -1024,7 +1139,7 @@ export default function CosHome() {
                       {{
                         new: "Order placed",
                         preparing: "Preparing",
-                        ready: "Ready",
+                        ready: "Ready your Payment",
                         completed: "Completed",
                       }[order.status] || "Order placed"}
                     </span>
@@ -1050,6 +1165,8 @@ export default function CosHome() {
                           {item.quantity} × {item.name}
                         </span>
                         <strong>
+                          ₱ {(Number(item.price) * item.quantity).toFixed(2)}
+                          {" · "}
                           {order.status === "completed"
                             ? "Completed"
                             : item.checked
@@ -1058,6 +1175,9 @@ export default function CosHome() {
                                 ? "Queued"
                                 : "Preparing"}
                         </strong>
+                        {item.customization && (
+                          <small>{item.customization}</small>
+                        )}
                       </li>
                     ))}
                   </ul>

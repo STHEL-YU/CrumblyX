@@ -4,7 +4,7 @@ import { Icon } from '../../components/customer_ui.jsx'
 const trackingSteps = [
   { title: 'Order placed', description: 'Your order has been sent to the café.' },
   { title: 'Preparing', description: 'The kitchen will start preparing your items.' },
-  { title: 'Ready', description: 'Your order is ready for pickup or table delivery.' },
+  { title: 'Ready your Payment', description: 'Your order is ready. Please proceed to payment.' },
   { title: 'Completed', description: 'Your order has been completed. Thank you!' },
 ]
 
