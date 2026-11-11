@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
 import { query } from '../crumblyx-db.js'
-import { requireStaffSession } from '../staff-auth.js'
+import { requireStaffSession } from '../staff-auth/_helpers.js'
 
 const scrypt = promisify(scryptCallback)
 

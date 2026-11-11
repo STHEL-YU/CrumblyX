@@ -10,7 +10,7 @@ import {
   sessionToken,
   StaffAuthError,
   verifyStaffPassword,
-} from '../staff-auth.js'
+} from './_helpers.js'
 
 function json(response, status, body) {
   return response.status(status).json(body)

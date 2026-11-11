@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { pool, query } from '../crumblyx-db.js'
-import { requireStaffSession } from '../staff-auth.js'
+import { requireStaffSession } from '../staff-auth/_helpers.js'
 
 function json(response, status, body) {
   response.status(status).json(body)

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { pool, query } from '../crumblyx-db.js'
-import { requireStaffSession } from '../staff-auth.js'
+import { requireStaffSession } from '../staff-auth/_helpers.js'
 
 const ORDER_STATUSES = ['new', 'preparing', 'ready', 'completed']
 const ADD_ON_PRICES = { caramel: 30, cream: 25, oat: 25 }

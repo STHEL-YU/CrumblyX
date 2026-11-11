@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { query } from '../crumblyx-db.js'
-import { requireStaffSession } from '../staff-auth.js'
+import { requireStaffSession } from '../staff-auth/_helpers.js'
 
 class RequestError extends Error {
 	constructor(status, message) {

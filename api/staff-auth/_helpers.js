@@ -1,6 +1,6 @@
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
-import { createStaffAuthTables, query } from './crumblyx-db.js'
+import { createStaffAuthTables, query } from '../crumblyx-db.js'
 
 const scrypt = promisify(scryptCallback)
 const SESSION_COOKIE = 'crumblyx_staff_session'

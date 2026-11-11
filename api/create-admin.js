@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ensureStaffAuthSchema, hashStaffPassword } from './staff-auth.js'
+import { ensureStaffAuthSchema, hashStaffPassword } from './staff-auth/_helpers.js'
 import { pool, query } from './crumblyx-db.js'
 
 const isDirectScript = process.argv[1]
