@@ -17,7 +17,7 @@ function readStoredArray(key) {
   }
 }
 
-export default function CustomerNotifications({ customerId, orders, ordersLoaded }) {
+export default function CustomerNotifications({ customerId, orders, ordersLoaded, onSelectMenuItem }) {
   const [isOpen, setIsOpen] = useState(false)
   const storageKey = `crumblyx-notifications-${customerId}`
   const seenMenuStorageKey = `crumblyx-seen-menu-${customerId}`
@@ -126,10 +126,20 @@ export default function CustomerNotifications({ customerId, orders, ordersLoaded
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen])
 
-  function markAsRead(id) {
+  function handleNotificationClick(notification) {
+    // Mark as read first
     setNotifications((items) =>
-      items.map((item) => item.id === id ? { ...item, read: true } : item),
+      items.map((item) => item.id === notification.id ? { ...item, read: true } : item),
     )
+
+    // Check if it's a menu notification (format: "menu:item_id")
+    if (notification.id.startsWith('menu:')) {
+      const menuItemId = notification.id.split(':')[1]
+      if (onSelectMenuItem && menuItemId) {
+        setIsOpen(false) // Close the notification panel
+        onSelectMenuItem(menuItemId) // Trigger parent handler to open cappuccino info
+      }
+    }
   }
 
   function markAllAsRead() {
@@ -180,22 +190,24 @@ export default function CustomerNotifications({ customerId, orders, ordersLoaded
               {notifications.length === 0 ? (
                 <p className="notification-empty">You don&apos;t have any notifications yet.</p>
               ) : (
-                notifications.map((notification) => (
-                  <button
-                    className={`notification-item ${notification.read ? 'read' : 'unread'}`}
-                    type="button"
-                    key={notification.id}
-                    onClick={() => markAsRead(notification.id)}
-                  >
-                    <span className="notification-icon"><Icon name="bell" size={17} /></span>
-                    <span className="notification-copy">
-                      <strong>{notification.title}</strong>
-                      <span>{notification.message}</span>
-                      <small>{notification.createdAt ? new Date(notification.createdAt).toLocaleString() : 'CrumblyX notice'}</small>
-                    </span>
-                    {!notification.read && <i className="notification-unread-dot" aria-label="Unread" />}
-                  </button>
-                ))
+                <div>
+                  {notifications.map((notification) => (
+                    <button
+                      key={notification.id}
+                      className={`notification-item ${notification.read ? 'read' : 'unread'}`}
+                      type="button"
+                      onClick={() => handleNotificationClick(notification)}
+                    >
+                      <span className="notification-icon"><Icon name="bell" size={17} /></span>
+                      <span className="notification-copy">
+                        <strong>{notification.title}</strong>
+                        <span>{notification.message}</span>
+                        <small>{notification.createdAt ? new Date(notification.createdAt).toLocaleString() : 'CrumblyX notice'}</small>
+                      </span>
+                      {!notification.read && <i className="notification-unread-dot" aria-label="Unread" />}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
             <p className="notification-footnote">New menu items and order status updates appear here.</p>

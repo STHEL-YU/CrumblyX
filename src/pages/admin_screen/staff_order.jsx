@@ -565,25 +565,47 @@ export default function StaffOrders() {
 
   useEffect(() => {
     const controller = new AbortController();
-    Promise.all([
-      orderRequest("list", "GET", undefined, controller.signal),
-      orderRequest("archive", "GET", undefined, controller.signal),
-    ])
-      .then(([data, archiveData]) => {
-        if (!Array.isArray(data.orders) || !Array.isArray(archiveData.orders))
-          throw new Error("Invalid orders response.");
-        if (!controller.signal.aborted) {
-          setOrders(data.orders.map(normalizeOrder));
-          setArchivedOrders(archiveData.orders.map(normalizeOrder));
-        }
-      })
-      .catch((requestError) => {
-        if (!controller.signal.aborted) setError(requestError.message);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
+    
+    const fetchOrders = (isInitial = false) => {
+      if (isInitial) setLoading(true);
+      Promise.all([
+        orderRequest("list", "GET", undefined, controller.signal),
+        orderRequest("archive", "GET", undefined, controller.signal),
+      ])
+        .then(([data, archiveData]) => {
+          if (!Array.isArray(data.orders) || !Array.isArray(archiveData.orders))
+            throw new Error("Invalid orders response.");
+          if (!controller.signal.aborted) {
+            setOrders(data.orders.map(normalizeOrder));
+            setArchivedOrders(archiveData.orders.map(normalizeOrder));
+            
+            // Keep selectedOrder updated with the latest background data changes
+            setSelectedOrder((current) => {
+              if (!current) return null;
+              const allFetchedOrders = [...data.orders, ...archiveData.orders].map(normalizeOrder);
+              return allFetchedOrders.find((o) => o.id === current.id) || current;
+            });
+          }
+        })
+        .catch((requestError) => {
+          if (!controller.signal.aborted) setError(requestError.message);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted && isInitial) setLoading(false);
+        });
+    };
+
+    fetchOrders(true);
+
+    // Auto refresh every 5 seconds
+    const interval = setInterval(() => {
+      fetchOrders(false);
+    }, 5000);
+
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, [refreshKey]);
 
   const counts = FILTERS.reduce((result, item) => {

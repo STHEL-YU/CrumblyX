@@ -552,6 +552,12 @@ export default function CosHome() {
               customerId={customer.id}
               orders={trackedOrders}
               ordersLoaded={trackedOrdersLoaded}
+              onSelectMenuItem={(itemId) => {
+                const targetProduct = products.find((p) => p.id === itemId);
+                if (targetProduct) {
+                  startItem(targetProduct);
+                }
+              }}
             />
           </div>
         </header>
@@ -973,7 +979,9 @@ export default function CosHome() {
                             <small>{item.customization}</small>
                           )}
                           {item.specialInstruction && (
-                            <small>Special instruction: {item.specialInstruction}</small>
+                            <small>
+                              Special instruction: {item.specialInstruction}
+                            </small>
                           )}
                         </p>
                         <div
@@ -1154,7 +1162,9 @@ export default function CosHome() {
                           <small>{item.customization}</small>
                         )}
                         {item.specialInstruction && (
-                          <small>Special instruction: {item.specialInstruction}</small>
+                          <small>
+                            Special instruction: {item.specialInstruction}
+                          </small>
                         )}
                       </li>
                     ))}
