@@ -127,6 +127,10 @@ function validateCreateBody(body) {
     if (typeof item.productId !== 'string' || !item.productId
       || !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 1000
       || (item.customization != null && (typeof item.customization !== 'string' || item.customization.length > 500))
+      || (item.specialInstruction != null && (
+        typeof item.specialInstruction !== 'string'
+        || item.specialInstruction.length > 500
+      ))
       || (item.customizationData != null && (
         typeof item.customizationData !== 'object'
         || Array.isArray(item.customizationData)
@@ -224,6 +228,7 @@ async function createOrder(body, response) {
         price: Math.max(0, unitPrice),
         image: product.image || '',
         customization: item.customization || '',
+        specialInstruction: item.specialInstruction || '',
         customizationData: item.customizationData || null,
         checked: false,
       }

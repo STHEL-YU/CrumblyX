@@ -58,6 +58,51 @@ function peso(value) {
   return `₱${Number(value).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function CustomizationList({ customization }) {
+  const options = customization
+    ? customization.split(",").map((option) => option.trim()).filter(Boolean)
+    : [];
+  if (options.length === 0) return null;
+
+  return (
+    <div className="mt-1 text-xs leading-relaxed text-stone-500">
+      <span>Options / add-ons:</span>
+      <ul className="list-disc pl-4">
+        {options.map((option, index) => (
+          <li key={`${option}-${index}`}>{option}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function OrderNotes({ order, className = "" }) {
+  const instructions = order.items.filter((item) => item.specialInstruction);
+
+  return (
+    <section className={`rounded-xl border border-amber-100 bg-amber-50/60 px-4 py-3 ${className}`}>
+      <h3 className="text-sm font-semibold text-stone-900">Order notes</h3>
+      {order.notes && (
+        <p className="mt-1 whitespace-pre-wrap break-words text-sm text-stone-700">
+          {order.notes}
+        </p>
+      )}
+      {instructions.length > 0 && (
+        <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-stone-700">
+          {instructions.map((item) => (
+            <li key={item.id}>
+              {item.name} ({item.quantity}×): {item.specialInstruction}
+            </li>
+          ))}
+        </ul>
+      )}
+      {!order.notes && instructions.length === 0 && (
+        <p className="mt-1 text-sm text-stone-700">No order notes.</p>
+      )}
+    </section>
+  );
+}
+
 async function orderRequest(action, method = "GET", body, signal) {
   const response = await fetch(`/api/orders/${action}`, {
     method,
@@ -91,6 +136,7 @@ function normalizeOrder(order) {
     timeAgo,
     items: order.items.map((item) => ({
       ...item,
+      specialInstruction: item.specialInstruction || "",
       checked: Boolean(item.checked),
     })),
   };
@@ -145,10 +191,13 @@ function OrderCard({ order, onToggleItem, onSelect, onArchive, onRestore, onPerm
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2.5">
             <h3 className="text-lg font-extrabold tracking-tight text-stone-900">
-          {order.customerName || "Guest order"}
+              {order.customerName || "Guest order"}
             </h3>
             <StatusPill status={order.status} />
           </div>
+          <p className="mt-1 break-all text-xs text-stone-500">
+            {order.customerEmail || "No email provided"}
+          </p>
           <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-stone-500">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-xs font-semibold text-stone-600">
               <DashboardIcon
@@ -156,6 +205,9 @@ function OrderCard({ order, onToggleItem, onSelect, onArchive, onRestore, onPerm
                 size={15}
               />
               {order.orderType}
+            </span>
+            <span className="text-xs font-medium text-stone-500">
+              Order #{String(order.id).slice(0, 8)}
             </span>
             {order.timeAgo && (
               <>
@@ -215,13 +267,19 @@ function OrderCard({ order, onToggleItem, onSelect, onArchive, onRestore, onPerm
                   <DashboardIcon name="menu" size={18} />
                 </span>
               )}
-              <span
-                className={`min-w-0 text-[15px] leading-snug transition-colors ${item.checked ? "text-stone-400 line-through" : "text-stone-800"}`}
-              >
-                {item.quantity > 1 && (
-                  <b className="mr-1.5 font-semibold">{item.quantity}×</b>
-                )}
-                {item.name}
+              <span className="min-w-0 flex-1">
+                <span
+                  className={`block text-[15px] leading-snug transition-colors ${item.checked ? "text-stone-400 line-through" : "text-stone-800"}`}
+                >
+                  {item.quantity > 1 && (
+                    <b className="mr-1.5 font-semibold">{item.quantity}×</b>
+                  )}
+                  {item.name}
+                </span>
+                <CustomizationList customization={item.customization} />
+              </span>
+              <span className="shrink-0 text-right text-xs font-medium tabular-nums text-stone-600">
+                {peso(Number(item.price) * Number(item.quantity))}
               </span>
             </label>
           </li>
@@ -229,6 +287,7 @@ function OrderCard({ order, onToggleItem, onSelect, onArchive, onRestore, onPerm
       </ul>
 
       <div className="mt-4 border-t border-stone-100 bg-stone-50/60 px-5 py-4">
+        <OrderNotes order={order} className="mb-4 bg-white" />
         <div className="mb-2 flex items-center justify-between text-sm">
           <span className="font-medium text-stone-600">
             {completedItems} of {totalItems} items prepared
@@ -292,14 +351,14 @@ function OrderCard({ order, onToggleItem, onSelect, onArchive, onRestore, onPerm
   );
 }
 
-function OrderDetailsPanel({ order, onClose, onAdvance, onArchive, onRestore, onPermanentDelete, archived, pendingAction }) {
+function OrderDetailsPanel({ order, onClose, onAdvance, onArchive, onRestore, onPermanentDelete, archived, pendingAction, className = "" }) {
   const actionLabel = ACTION_LABELS[order.status];
   const completedItems = order.items.filter((item) => item.checked).length;
   const blocked =
     order.status === "preparing" && completedItems !== order.items.length;
 
   return (
-      <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm" aria-labelledby="staff-order-panel-title">
+      <section className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm ${className}`} aria-labelledby="staff-order-panel-title">
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-stone-100 px-5 py-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[.12em] text-stone-400">Incoming order</p>
@@ -361,25 +420,22 @@ function OrderDetailsPanel({ order, onClose, onAdvance, onArchive, onRestore, on
                       <b className="mr-1.5 font-semibold">{item.quantity}×</b>
                       {item.name}
                     </p>
+                    <CustomizationList customization={item.customization} />
                     <span
                       className={`mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${item.checked ? "bg-emerald-50 text-emerald-700" : "bg-stone-100 text-stone-600"}`}
                     >
                       {item.checked ? "Prepared" : "Pending"}
                     </span>
+                    <p className="mt-1 text-xs font-medium tabular-nums text-stone-600">
+                      {peso(Number(item.price) * Number(item.quantity))}
+                    </p>
                   </div>
                 </li>
               ))}
             </ul>
           </div>
 
-          <div className="rounded-xl border border-amber-100 bg-amber-50/60 px-4 py-3">
-            <h3 className="text-sm font-semibold text-stone-900">
-              Order notes
-            </h3>
-            <p className="mt-1 text-sm text-stone-700">
-              {order.notes || "No special instructions."}
-            </p>
-          </div>
+          <OrderNotes order={order} />
 
           <div className="flex items-center justify-between border-t border-stone-100 pt-4">
             <span className="text-sm font-medium text-stone-600">Total</span>
@@ -473,10 +529,39 @@ export default function StaffOrders() {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [compactViewport, setCompactViewport] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 1276px)").matches,
+  );
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { profileOpen, openProfile, closeProfile } = useStaffProfile();
   const [section, setSection] = useState("Orders");
   const navigate = useNavigate();
+  const isOrderModalOpen = compactViewport && Boolean(selectedOrder);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 1276px)");
+    const updateViewport = () => setCompactViewport(mediaQuery.matches);
+    mediaQuery.addEventListener("change", updateViewport);
+    return () => mediaQuery.removeEventListener("change", updateViewport);
+  }, []);
+
+  useEffect(() => {
+    if (!isOrderModalOpen) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setSelectedOrder(null);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isOrderModalOpen]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -721,7 +806,7 @@ export default function StaffOrders() {
 
         {section === "Orders" ? (
           <div className={adminTw("staff-orders-content")}>
-            <div className="grid min-h-full gap-5 xl:grid-cols-[minmax(0,7fr)_minmax(310px,3fr)]">
+            <div className="grid min-h-full gap-5 min-[1277px]:grid-cols-[minmax(0,7fr)_minmax(310px,3fr)]">
               <section className="min-w-0" aria-labelledby="staff-order-list-title">
                 <nav className="mb-5 inline-flex rounded-xl border border-stone-200 bg-white p-1 shadow-sm" aria-label="Order views">
                   <button
@@ -869,7 +954,23 @@ export default function StaffOrders() {
                 )}
               </section>
 
-              <aside className="flex min-h-[420px] min-w-0 flex-col xl:sticky xl:top-0 xl:h-[calc(100dvh-10.5rem)]" aria-label="Selected order details">
+              <aside
+                className={
+                  compactViewport
+                    ? isOrderModalOpen
+                      ? "fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 p-4"
+                      : "hidden"
+                    : "flex min-h-[420px] min-w-0 flex-col min-[1277px]:sticky min-[1277px]:top-0 min-[1277px]:h-[calc(100dvh-10.5rem)]"
+                }
+                aria-label="Selected order details"
+                role={isOrderModalOpen ? "dialog" : undefined}
+                aria-modal={isOrderModalOpen ? "true" : undefined}
+                onClick={(event) => {
+                  if (isOrderModalOpen && event.target === event.currentTarget) {
+                    setSelectedOrder(null);
+                  }
+                }}
+              >
                 {selectedOrder ? (
                   <OrderDetailsPanel
                     order={selectedOrder}
@@ -880,6 +981,11 @@ export default function StaffOrders() {
                     onPermanentDelete={permanentlyDeleteOrder}
                     archived={orderView === "archive"}
                     pendingAction={pendingAction}
+                    className={
+                      isOrderModalOpen
+                        ? "h-[min(90dvh,48rem)] w-full max-w-xl flex-none"
+                        : ""
+                    }
                   />
                 ) : (
                   <section className="flex min-h-[420px] flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-10 text-center">

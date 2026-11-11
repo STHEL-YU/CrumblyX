@@ -270,6 +270,7 @@ export default function CosHome() {
     if (!selected) return;
     let customization = "";
     let customizationData = null;
+    const specialInstruction = instruction.trim();
 
     if (selected.isBeverage) {
       const addonNames = selectedAddons.map(
@@ -283,7 +284,6 @@ export default function CosHome() {
           : []),
         cupSize.toLowerCase(),
         ...addonNames,
-        instruction.trim(),
       ]
         .filter(Boolean)
         .join(", ");
@@ -304,7 +304,6 @@ export default function CosHome() {
                 availableAddons.find((addon) => addon.id === addonId)?.name,
             )
           : []),
-        instruction.trim(),
       ]
         .filter(Boolean)
         .join(", ");
@@ -314,7 +313,8 @@ export default function CosHome() {
       (item) =>
         item.productId === selected.id &&
         item.price === unitTotal &&
-        item.customization === customization,
+        item.customization === customization &&
+        item.specialInstruction === specialInstruction,
     );
 
     if (existingItem) {
@@ -335,6 +335,7 @@ export default function CosHome() {
         price: unitTotal,
         image: selected.image,
         customization,
+        specialInstruction,
         customizationData,
       };
       setCart((items) => [...items, newItem]);
@@ -349,35 +350,6 @@ export default function CosHome() {
     );
     if (itemsToOrder.length === 0 || orderSubmitting) return;
 
-    let orderNotes = "";
-    if (orderMode !== "dine-in") {
-      try {
-        const takeoutDetails = JSON.parse(
-          sessionStorage.getItem("crumblyx-takeout-details") || "null",
-        );
-        if (!takeoutDetails?.address || !takeoutDetails?.phone) {
-          setOrderError(
-            "Please enter your takeout address and phone number before ordering.",
-          );
-          return;
-        }
-        orderNotes = [
-          `Takeout contact: ${takeoutDetails.name || customer.name}`,
-          `Email: ${takeoutDetails.email || customer.email}`,
-          `Phone: ${takeoutDetails.phone}`,
-          `Address: ${takeoutDetails.address}`,
-          takeoutDetails.landmark ? `Landmark: ${takeoutDetails.landmark}` : "",
-        ]
-          .filter(Boolean)
-          .join("\n");
-      } catch {
-        setOrderError(
-          "Takeout details are invalid. Please choose Take Out again.",
-        );
-        return;
-      }
-    }
-
     setOrderSubmitting(true);
     setOrderError("");
     try {
@@ -389,11 +361,11 @@ export default function CosHome() {
           tableNumber,
           customerName: customer.name,
           customerEmail: customer.email,
-          notes: orderNotes,
           items: itemsToOrder.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
             customization: item.customization,
+            specialInstruction: item.specialInstruction,
             customizationData: item.customizationData,
           })),
         }),
@@ -1000,6 +972,9 @@ export default function CosHome() {
                           {item.customization && (
                             <small>{item.customization}</small>
                           )}
+                          {item.specialInstruction && (
+                            <small>Special instruction: {item.specialInstruction}</small>
+                          )}
                         </p>
                         <div
                           className="cart-quantity-stepper"
@@ -1177,6 +1152,9 @@ export default function CosHome() {
                         </strong>
                         {item.customization && (
                           <small>{item.customization}</small>
+                        )}
+                        {item.specialInstruction && (
+                          <small>Special instruction: {item.specialInstruction}</small>
                         )}
                       </li>
                     ))}
